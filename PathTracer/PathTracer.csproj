@@ -8,7 +8,16 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="OpenTK" Version="5.0.0-pre.6" />
+      <PackageReference Include="OpenTK" Version="5.0.0-pre.7" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="shader\shader.frag">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="shader\shader.vert">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>
