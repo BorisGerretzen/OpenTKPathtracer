@@ -9,17 +9,19 @@ public class Material : Uploadable {
     public Vector3 Albedo;
     public Vector3 Emission;
     private float metallic;
-    private float specularity;
+    public float Specularity;
 
-    public Material(Vector3 albedo, Vector3 emission) {
+    public Material(Vector3 albedo, Vector3 emission, float specularity = 0.0f) {
         Albedo = albedo;
         Emission = emission;
+        Specularity = specularity;
     }
 
     public override int BufferOffset => throw new NotSupportedException("Do not upload directly");
 
     public override Vector4[] GetGPUData() {
         _gpuData[0].Xyz = Emission;
+        _gpuData[0].W = Specularity;
         _gpuData[1].Xyz = Albedo;
         return _gpuData;
     }

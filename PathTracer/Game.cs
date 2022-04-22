@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -23,6 +24,7 @@ public class Game : GameWindow {
     private Camera _camera;
 
     private bool _cameraLocked;
+    private uint _lastFrameCount;
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
     private uint _frameNumber;
@@ -33,6 +35,8 @@ public class Game : GameWindow {
     private int _numCuboids;
     private int _numSpheres;
     private ShaderProgram _shaderProgram;
+
+    private readonly Stopwatch _stopwatch = new();
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
     private GLDebugProc callback;
@@ -93,7 +97,7 @@ public class Game : GameWindow {
         CreateScene();
 
         // Spawn camera
-        _camera = new Camera(new Vector3(5, 5, -2), Size.X / (float)Size.Y);
+        _camera = new Camera(new Vector3(5, 5, 5), Size.X / (float)Size.Y);
         CursorGrabbed = true;
     }
 
@@ -101,33 +105,40 @@ public class Game : GameWindow {
         _numSpheres = 0;
         _numCuboids = 0;
         var whiteDiffuse = new Material(new Vector3(1, 1, 1), new Vector3(0));
-        var redDiffuse = new Material(new Vector3(1, 0, 0), new Vector3(0));
-        var greenDiffuse = new Material(new Vector3(0, 1, 0), new Vector3(0));
+        var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0), 1.0f);
+        var redDiffuse = new Material(new Vector3(1, 0.3f, 0.3f), new Vector3(0.0f));
+        var greenDiffuse = new Material(new Vector3(0.2f, 0.8f, 0.2f), new Vector3(0));
+        var blueDiffuse = new Material(new Vector3(0.3f, 0.3f, 1), new Vector3(0));
 
         var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
-        var redLight = new Material(new Vector3(0.04f), new Vector3(1f, 0.2f, 0.2f) * 10.0f);
+        var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 20.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 30.0f);
+        var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
         // Non emissive sphere
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
 
         // floor
-        GameObjects.Add(new Cuboid(new Vector3(0, 0, 0), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
         // roof
-        GameObjects.Add(new Cuboid(new Vector3(0, 10, 0), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
-
-        // left wall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 0), new Vector3(1, 10, 9), redDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
 
         // right wall
-        GameObjects.Add(new Cuboid(new Vector3(9, 1, 0), new Vector3(10, 10, 9), greenDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
+
+        // left wall
+        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
 
         // backwall
         GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
 
-        GameObjects.Add(new Sphere(new Vector3(3, 2, 4), 1, whiteDiffuse, _numSpheres++));
-        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuse, _numSpheres++));
+        // Frontwall
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
+
+        GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuseReflective, _numSpheres++));
+        GameObjects.Add(new Cuboid(new Vector3(2, 1, 3), new Vector3(4, 3, 5), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseReflective, _numSpheres++));
 
 
         // light
@@ -139,6 +150,7 @@ public class Game : GameWindow {
 
 
         foreach (var gameObject in GameObjects) gameObject.Upload(_gameObjectsUbo);
+        _stopwatch.Start();
     }
 
     protected override void OnResize(ResizeEventArgs e) {
@@ -153,6 +165,12 @@ public class Game : GameWindow {
 
 
     protected override void OnRenderFrame(FrameEventArgs args) {
+        if (_stopwatch.ElapsedMilliseconds > 3000) {
+            Console.WriteLine((_frameNumber - _lastFrameCount) / (_stopwatch.ElapsedMilliseconds / 1000));
+            _stopwatch.Restart();
+            _lastFrameCount = _frameNumber;
+        }
+
         base.OnRenderFrame(args);
 
         _shaderProgram.SetUniformUInt(0, _frameNumber++);

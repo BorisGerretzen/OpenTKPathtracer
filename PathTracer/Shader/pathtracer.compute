@@ -1,6 +1,6 @@
 ﻿#version 450 core
-#define RAYS_PER_PIXEL 5
-#define RAY_DEPTH 4
+#define RAYS_PER_PIXEL 1
+#define RAY_DEPTH 10
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
@@ -10,6 +10,7 @@ layout (binding=0, rgba32f) uniform image2D imgOut;
 struct Material
 {
     vec3 Emission;
+    float Specularity;
     vec3 Albedo;
 };
 
@@ -209,6 +210,23 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
     return rayHit.Distance < RAY_MAX;
 }
 
+float BRDF(Ray ray, RayHit rayHit, out Ray newRay) {
+    float rayProbability;
+    vec3 newRayDirection;
+    
+    float reflectRoll = GetRandomFloat01();
+    if (rayHit.Material.Specularity > reflectRoll) {
+        newRayDirection = reflect(ray.Direction, rayHit.Normal);
+        rayProbability = rayHit.Material.Specularity;
+    } else {
+        newRayDirection = CosineSampleHemisphere(rayHit.Normal);
+        rayProbability = 1.0f - rayHit.Material.Specularity;
+    }
+    newRay.Direction = newRayDirection;
+    newRay.Origin = rayHit.Position + newRay.Direction*0.001f;
+    return rayProbability;
+}
+
 // Gets the color of a given ray with all the bounces and stuff.
 vec3 getColor(Ray ray)
 {
@@ -222,14 +240,20 @@ vec3 getColor(Ray ray)
             // Mix the colors
             color += rayHit.Material.Emission * throughput;
             throughput *= rayHit.Material.Albedo;
+            float rayProbability = BRDF(ray, rayHit, ray);
+            throughput /= rayProbability;
+            // Russian roulette
+            float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
+            if (GetRandomFloat01() > propagationChance) {
+                break;
+            }
+            throughput /= propagationChance;
 
             // Update ray
-            ray.Direction = CosineSampleHemisphere(rayHit.Normal);
-            ray.Origin = rayHit.Position + ray.Direction*0.001f;
         }
         else
         {
-            color += throughput * vec3(0.3f);
+            //color += throughput * vec3(0.3f);
             break;
         }
     }
