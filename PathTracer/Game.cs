@@ -1,4 +1,7 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
@@ -6,6 +9,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using PathTracer.Helpers;
+using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
 
 namespace PathTracer;
 
@@ -162,6 +166,22 @@ public class Game : GameWindow {
         SwapBuffers();
     }
 
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+    private void SaveImage() {
+        var name = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString();
+        GL.PixelStorei(PixelStoreParameter.PackAlignment, 1);
+        var pixels = new byte[_windowSize.X * _windowSize.Y * 4];
+        GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
+        var fixedPixels = new byte[_windowSize.X * _windowSize.Y * 4];
+
+        for (var y = 0; y < _windowSize.Y; y++) Array.Copy(pixels, y * _windowSize.X * 4, fixedPixels, (_windowSize.X * _windowSize.Y - (y + 1) * _windowSize.X) * 4, _windowSize.X * 4);
+        var bmp = new Bitmap(_windowSize.X, _windowSize.Y, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var bmpData = bmp.LockBits(new Rectangle(0, 0, _windowSize.X, _windowSize.Y), ImageLockMode.WriteOnly, bmp.PixelFormat);
+        Marshal.Copy(fixedPixels, 0, bmpData.Scan0, fixedPixels.Length);
+        bmp.UnlockBits(bmpData);
+        bmp.Save($"{name}.png", ImageFormat.Png);
+    }
+
     protected override void OnUpdateFrame(FrameEventArgs e) {
         base.OnUpdateFrame(e);
         var cameraMoved = false;
@@ -171,11 +191,21 @@ public class Game : GameWindow {
         var input = KeyboardState;
 
         if (input.IsKeyDown(Keys.Escape)) Close();
+
+        // Lock camera on press L
         if (KeyboardState.IsKeyDown(Keys.L) && !_lastKeyboardState.IsKeyDown(Keys.L)) {
             _cameraLocked = !_cameraLocked;
             var lockState = _cameraLocked ? "locked" : "unlocked";
             GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
         }
+
+        // Save image on press I
+        if (KeyboardState.IsKeyDown(Keys.I) && !_lastKeyboardState.IsKeyDown(Keys.I)) {
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Starting image export");
+            SaveImage();
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
+        }
+
 
         _lastKeyboardState = KeyboardState.GetSnapshot();
         if (_cameraLocked) return;
