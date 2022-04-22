@@ -1,5 +1,6 @@
 # OpenTK Pathtracer
 This is a path tracing algorithm implemented as an OpenGL compute shader, with OpenTK providing the OpenGL bindings.
+![perfect reflection](https://user-images.githubusercontent.com/15902678/164809199-aa79daee-b6f7-483a-9f56-3dd0e7b421e5.png)
 
 ## Capabilities
 In the compute shader a couple ways to improve the rendering time and quality are implemented.
