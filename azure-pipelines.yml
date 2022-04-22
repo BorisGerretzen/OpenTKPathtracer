@@ -1,50 +1,27 @@
-trigger:
-  branches:
-    include:
-    - main
-  paths:
-    exclude:
-    - README.md
-    - images/**
-
+name: $(BuildDefinitionName)_$(Year:yyyy).$(Month).$(DayOfMonth)$(Rev:.r)
 pool:
   vmImage: 'windows-2022'
 
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+
 steps:
-- task: NuGetToolInstaller@0
-  displayName: 'Use NuGet 4.4.1'
-  inputs:
-    versionSpec: 4.4.1
-
 - task: NuGetCommand@2
-  displayName: 'NuGet restore'
   inputs:
+    command: 'restore'
     restoreSolution: '**/*.sln'
+    feedsToUse: 'select'
 
-- task: VSBuild@1
-  displayName: 'Build solution **\*.sln'
+- task: DotNetCoreCLI@2
   inputs:
-    solution: '**/*.sln'
-    platform: 'Any CPU'
-    configuration: 'Release'
-
-- task: PublishSymbols@2
-  displayName: 'Publish symbols path'
-  inputs:
-    SearchPattern: '**\bin\**\*.pdb'
-    PublishSymbols: false
-  continueOnError: true
-
-- task: CopyFiles@2
-  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
-  inputs:
-    SourceFolder: '$(system.defaultworkingdirectory)'
-    Contents: 'PathTracer\bin\Release\**'
-    TargetFolder: '$(build.artifactstagingdirectory)'
-  condition: succeededOrFailed()
+    command: 'pack'
+    packagesToPack: './PathTracer/PathTracer.csproj'
+    versioningScheme: 'byBuildNumber'
 
 - task: PublishBuildArtifacts@1
-  displayName: 'Publish Artifact: drop'
   inputs:
-    PathtoPublish: '$(build.artifactstagingdirectory)'
-  condition: succeededOrFailed()
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
