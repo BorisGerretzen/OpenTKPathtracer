@@ -17,19 +17,22 @@ public class Game : GameWindow {
 
     private BufferHandle _basicDataUbo;
     private Camera _camera;
+
+    private bool _cameraLocked;
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
+    private uint _frameNumber;
     private BufferHandle _gameObjectsUbo;
+
+    private KeyboardState _lastKeyboardState;
     private Vector2 _lastPos;
+    private int _numCuboids;
+    private int _numSpheres;
     private ShaderProgram _shaderProgram;
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
-    private uint _frameNumber;
-    private int _numSpheres;
-    private int _numCuboids;
-
-    private bool _cameraLocked;
     private GLDebugProc callback;
+
     public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
@@ -86,7 +89,7 @@ public class Game : GameWindow {
         CreateScene();
 
         // Spawn camera
-        _camera = new Camera(Vector3.Zero, Size.X / (float)Size.Y);
+        _camera = new Camera(new Vector3(5, 5, -2), Size.X / (float)Size.Y);
         CursorGrabbed = true;
     }
 
@@ -94,24 +97,42 @@ public class Game : GameWindow {
         _numSpheres = 0;
         _numCuboids = 0;
         var whiteDiffuse = new Material(new Vector3(1, 1, 1), new Vector3(0));
+        var redDiffuse = new Material(new Vector3(1, 0, 0), new Vector3(0));
+        var greenDiffuse = new Material(new Vector3(0, 1, 0), new Vector3(0));
 
         var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
         var redLight = new Material(new Vector3(0.04f), new Vector3(1f, 0.2f, 0.2f) * 10.0f);
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1f, 1f, 1f) * 10.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 20.0f);
 
         // Non emissive sphere
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
 
-        // Non emissive cuboid
-        GameObjects.Add(new Cuboid(new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, 0.5f, 0.5f), whiteDiffuse, _numCuboids++));
+        // floor
+        GameObjects.Add(new Cuboid(new Vector3(0, 0, 0), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        // roof
+        GameObjects.Add(new Cuboid(new Vector3(0, 10, 0), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
 
-        // Emissive spheres
-        GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
-        GameObjects.Add(new Sphere(new Vector3(0.866f * 4f, 0, -0.5f * 4f), 1, redLight, _numSpheres++));
-        GameObjects.Add(new Sphere(new Vector3(-0.866f * 4f, 0, -0.5f * 4f), 1, blueLight, _numSpheres++));
+        // left wall
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 0), new Vector3(1, 10, 9), redDiffuse, _numCuboids++));
 
-        
+        // right wall
+        GameObjects.Add(new Cuboid(new Vector3(9, 1, 0), new Vector3(10, 10, 9), greenDiffuse, _numCuboids++));
+
+        // backwall
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+
+        GameObjects.Add(new Sphere(new Vector3(3, 2, 4), 1, whiteDiffuse, _numSpheres++));
+        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuse, _numSpheres++));
+
+
+        // light
+        GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight, _numCuboids++));
+        // Emissive spheres 120 deg
+        //GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
+        //GameObjects.Add(new Sphere(new Vector3(0.866f * 4f, 0, -0.5f * 4f), 1, redLight, _numSpheres++));
+        //GameObjects.Add(new Sphere(new Vector3(-0.866f * 4f, 0, -0.5f * 4f), 1, blueLight, _numSpheres++));
+
 
         foreach (var gameObject in GameObjects) gameObject.Upload(_gameObjectsUbo);
     }
@@ -140,8 +161,6 @@ public class Game : GameWindow {
         GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
         SwapBuffers();
     }
-
-    private KeyboardState _lastKeyboardState;
 
     protected override void OnUpdateFrame(FrameEventArgs e) {
         base.OnUpdateFrame(e);

@@ -7,11 +7,11 @@ public class Sphere : GameObject {
     public static int SizeInBytes = Vector3.SizeInBytes + 4 + Material.SizeInBytes;
     private readonly Vector4[] _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
     public int Instance;
-    
+
     public Material Material;
     public Vector3 Position;
     public float Radius;
-    
+
     public Sphere(Vector3 position, float radius, Material material, int instance) {
         Position = position;
         Radius = radius;

@@ -1,6 +1,6 @@
 ﻿#version 450 core
 #define RAYS_PER_PIXEL 5
-#define RAY_DEPTH 2
+#define RAY_DEPTH 4
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
@@ -243,12 +243,12 @@ void main()
 
     // Get pixel coordinates as well as normalized between [-1,1]
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
-    vec2 normalizedDeviceCoordinates = vec2(gl_GlobalInvocationID.xy) / vec2(imageSize(imgOut)) * 2 - 1;
-
     // Shoot out a couple rays, the average color will be the color of the pixel
     vec3 color = vec3(0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
     {
+        vec2 offset = vec2(GetRandomFloat01(), GetRandomFloat01());
+        vec2 normalizedDeviceCoordinates = vec2(pos+offset) / vec2(imageSize(imgOut)) * 2 - 1;
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition, normalizedDeviceCoordinates);
         color += getColor(ray);
     }

@@ -7,7 +7,7 @@ public class Cuboid : GameObject {
     public static int SizeInBytes = Vector4.SizeInBytes * 2 + Material.SizeInBytes;
     private readonly Vector4[] _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
     public int Instance;
-    
+
     public Material Material;
     public Vector3 Max;
     public Vector3 Min;
