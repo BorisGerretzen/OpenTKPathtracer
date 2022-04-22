@@ -16,9 +16,12 @@ steps:
 
 - task: DotNetCoreCLI@2
   inputs:
-    command: 'pack'
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
     packagesToPack: './PathTracer/PathTracer.csproj'
     versioningScheme: 'byBuildNumber'
+  displayName: 'dotnet build'
+
 
 - task: PublishBuildArtifacts@1
   inputs:
