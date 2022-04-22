@@ -9,7 +9,6 @@ var gameWindowSettings = new GameWindowSettings();
 gameWindowSettings.RenderFrequency = 144;
 gameWindowSettings.UpdateFrequency = 144;
 
-
 var nativeWindowSettings = new NativeWindowSettings();
 nativeWindowSettings.Size = new Vector2i(960, 540);
 nativeWindowSettings.Title = "Pathtracer?";

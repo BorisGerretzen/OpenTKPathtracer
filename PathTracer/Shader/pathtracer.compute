@@ -1,5 +1,5 @@
 ﻿#version 450 core
-#define RAYS_PER_PIXEL 20
+#define RAYS_PER_PIXEL 5
 #define RAY_DEPTH 2
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
@@ -25,6 +25,7 @@ struct Cuboid
 // No hit support for cuboids yet so dont use them
     vec3 Min;
     vec3 Max;
+    Material Material;
 };
 
 struct Ray
@@ -60,7 +61,7 @@ uniform GameObjectsUBO {
     Cuboid Cuboids[64];
 } gameObjectsUBO;
 
-layout (location=0) uniform int currentFrameIndex;
+layout (location=0) uniform uint currentFrameIndex;
 layout (location=1) uniform vec2 gameObjectsSize;
 // ---------- End inputs ---------- //
 
@@ -125,6 +126,45 @@ bool rayIntersectSphere(Ray ray, Sphere sphere, out RayHit rayHit)
     return false;
 }
 
+bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
+    vec3 a1 = (cuboid.Min - ray.Origin) / ray.Direction;
+    vec3 a2 = (cuboid.Max - ray.Origin) / ray.Direction;
+
+    vec3 tsmall = min(a1, a2);
+    vec3 tlarge = max(a1, a2);
+
+    float t1 = max(-3.4028235e+38, max(tsmall.x, max(tsmall.y, tsmall.z)));
+    float t2 = min(3.4028235e+38, min(tlarge.x, min(tlarge.y, tlarge.z)));
+
+    float target=t1;
+    if (t2< 0) {
+        return false;
+    }
+
+    // if tmin > tmax, ray doesn't intersect AABB
+    if (t1 > t2) {
+        return false;
+    }
+    if (t1 < 0.0f) {
+        target =t2;
+    }
+    vec3 position = ray.Origin + ray.Direction*target;
+
+    vec3 halfSize = (cuboid.Max - cuboid.Min) * 0.5;
+    vec3 centerSurface = position - (cuboid.Max + cuboid.Min) * 0.5;
+
+    vec3 normal = vec3(0.0);
+    normal += vec3(sign(centerSurface.x), 0.0, 0.0) * step(abs(abs(centerSurface.x) - halfSize.x), 0.001f);
+    normal += vec3(0.0, sign(centerSurface.y), 0.0) * step(abs(abs(centerSurface.y) - halfSize.y), 0.001f);
+    normal += vec3(0.0, 0.0, sign(centerSurface.z)) * step(abs(abs(centerSurface.z) - halfSize.z), 0.001f);
+
+    rayHit.Distance = target;
+    rayHit.Material = cuboid.Material;
+    rayHit.Position = position;
+    rayHit.Normal = normalize(normal);
+    return true;
+}
+
 // Creates a ray from given normalized device coordinates into the scene in world coordinates.
 Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 viewPos, vec2 normalizedDeviceCoords)
 {
@@ -157,6 +197,15 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
         }
     }
 
+    for (int i = 0; i < gameObjectsSize.y; i++) {
+        Cuboid cuboid = gameObjectsUBO.Cuboids[i];
+
+        if (rayIntersectCuboid(ray, cuboid, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
+    }
     return rayHit.Distance < RAY_MAX;
 }
 
@@ -176,7 +225,7 @@ vec3 getColor(Ray ray)
 
             // Update ray
             ray.Direction = CosineSampleHemisphere(rayHit.Normal);
-            ray.Origin = rayHit.Position;
+            ray.Origin = rayHit.Position + ray.Direction*0.001f;
         }
         else
         {
@@ -203,6 +252,7 @@ void main()
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition, normalizedDeviceCoordinates);
         color += getColor(ray);
     }
+
     color /= RAYS_PER_PIXEL;
 
     // Progressive rendering

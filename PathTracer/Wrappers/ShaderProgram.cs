@@ -23,8 +23,8 @@ public class ShaderProgram : IDisposable {
         GL.UseProgram(Handle);
     }
 
-    public void SetUniformInt(int location, int value) {
-        GL.ProgramUniform1i(Handle, location, value);
+    public void SetUniformUInt(int location, uint value) {
+        GL.ProgramUniform1ui(Handle, location, value);
     }
 
     public unsafe void SetUniformVec2(int location, Vector2 vector2) {

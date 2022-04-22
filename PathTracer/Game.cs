@@ -24,8 +24,12 @@ public class Game : GameWindow {
     private ShaderProgram _shaderProgram;
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
-    private int frameNumber;
+    private uint _frameNumber;
+    private int _numSpheres;
+    private int _numCuboids;
 
+    private bool _cameraLocked;
+    private GLDebugProc callback;
     public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
@@ -46,7 +50,8 @@ public class Game : GameWindow {
         // Enable debugging
         GL.Enable(EnableCap.DebugOutput);
         GL.Enable(EnableCap.DebugOutputSynchronous);
-        GL.DebugMessageCallback(OpenGlDebugCallback, IntPtr.Zero);
+        callback = OpenGlDebugCallback;
+        GL.DebugMessageCallback(callback, IntPtr.Zero);
         GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Debug callback initialized");
 
         // Create basic data UBO
@@ -86,12 +91,27 @@ public class Game : GameWindow {
     }
 
     private void CreateScene() {
-        var instance = 0;
-        var blueDiffuse = new Material(new Vector3(0.337f, 0.368f, 0.674f), new Vector3(0));
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.945f, 0.2f) * 20.0f);
+        _numSpheres = 0;
+        _numCuboids = 0;
+        var whiteDiffuse = new Material(new Vector3(1, 1, 1), new Vector3(0));
 
-        GameObjects.Add(new Sphere(new Vector3(0, 0, 4), 1, blueDiffuse, instance++));
-        GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 1, whiteLight, instance++));
+        var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
+        var redLight = new Material(new Vector3(0.04f), new Vector3(1f, 0.2f, 0.2f) * 10.0f);
+        var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1f, 1f, 1f) * 10.0f);
+
+        // Non emissive sphere
+        //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
+
+        // Non emissive cuboid
+        GameObjects.Add(new Cuboid(new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, 0.5f, 0.5f), whiteDiffuse, _numCuboids++));
+
+        // Emissive spheres
+        GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
+        GameObjects.Add(new Sphere(new Vector3(0.866f * 4f, 0, -0.5f * 4f), 1, redLight, _numSpheres++));
+        GameObjects.Add(new Sphere(new Vector3(-0.866f * 4f, 0, -0.5f * 4f), 1, blueLight, _numSpheres++));
+
+        
 
         foreach (var gameObject in GameObjects) gameObject.Upload(_gameObjectsUbo);
     }
@@ -103,14 +123,15 @@ public class Game : GameWindow {
         _windowSize.Y = e.Height;
         GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4, _camera.GetProjectionMatrix().Inverted());
         GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        _frameNumber = 0;
     }
 
 
     protected override void OnRenderFrame(FrameEventArgs args) {
         base.OnRenderFrame(args);
 
-        _shaderProgram.SetUniformInt(0, frameNumber++);
-        _shaderProgram.SetUniformVec2(1, new Vector2(2, 0));
+        _shaderProgram.SetUniformUInt(0, _frameNumber++);
+        _shaderProgram.SetUniformVec2(1, new Vector2(_numSpheres, _numCuboids));
 
         GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.BindImageTexture(0, _textureHandle, 0, 0, 0, BufferAccessARB.ReadWrite, InternalFormat.Rgba32f);
@@ -120,16 +141,25 @@ public class Game : GameWindow {
         SwapBuffers();
     }
 
+    private KeyboardState _lastKeyboardState;
+
     protected override void OnUpdateFrame(FrameEventArgs e) {
         base.OnUpdateFrame(e);
         var cameraMoved = false;
-
         if (!IsFocused) // Check to see if the window is focused
             return;
 
         var input = KeyboardState;
 
         if (input.IsKeyDown(Keys.Escape)) Close();
+        if (KeyboardState.IsKeyDown(Keys.L) && !_lastKeyboardState.IsKeyDown(Keys.L)) {
+            _cameraLocked = !_cameraLocked;
+            var lockState = _cameraLocked ? "locked" : "unlocked";
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
+        }
+
+        _lastKeyboardState = KeyboardState.GetSnapshot();
+        if (_cameraLocked) return;
 
         const float cameraSpeed = 1.5f;
         const float sensitivity = 0.2f;
@@ -184,13 +214,10 @@ public class Game : GameWindow {
             _camera.Pitch -= deltaY * sensitivity; // Reversed since y-coordinates range from bottom to top
         }
 
-        if (cameraMoved || frameNumber == 0) {
+        if (cameraMoved || _frameNumber == 0) {
             GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4, _camera.GetViewMatrix().Inverted());
             GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes, _camera.Position);
-            frameNumber = 0;
-            Console.WriteLine(_camera.GetViewMatrix().Inverted());
-            Console.WriteLine("--");
-            Console.WriteLine(_camera.GetProjectionMatrix().Inverted());
+            _frameNumber = 0;
         }
     }
 }
