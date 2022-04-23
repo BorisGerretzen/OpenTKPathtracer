@@ -1,6 +1,6 @@
 ﻿#version 450 core
 #define RAYS_PER_PIXEL 1
-#define RAY_DEPTH 10
+#define RAY_DEPTH 13
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
@@ -12,6 +12,8 @@ struct Material
     vec3 Emission;
     float Specularity;
     vec3 Albedo;
+    float Refractivity;
+    float IndexOfRefraction;
 };
 
 struct Sphere
@@ -40,6 +42,7 @@ struct RayHit
     vec3 Position;
     vec3 Normal;
     float Distance;
+    bool FromInside;
     Material Material;
 };
 
@@ -119,7 +122,7 @@ bool rayIntersectSphere(Ray ray, Sphere sphere, out RayHit rayHit)
 
         rayHit.Position = ray.Origin + ray.Direction * target;
         rayHit.Distance = target;
-
+        rayHit.FromInside = target == t2;
         rayHit.Normal = normalize(rayHit.Position-sphere.Position);
         rayHit.Material = sphere.Material;
         return true;
@@ -137,8 +140,10 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
     float t1 = max(-3.4028235e+38, max(tsmall.x, max(tsmall.y, tsmall.z)));
     float t2 = min(3.4028235e+38, min(tlarge.x, min(tlarge.y, tlarge.z)));
 
-    float target=t1;
-    if (t2< 0) {
+    float target = t1;
+
+    // AABB behind us
+    if (t2 < 0) {
         return false;
     }
 
@@ -146,8 +151,13 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
     if (t1 > t2) {
         return false;
     }
-    if (t1 < 0.0f) {
-        target =t2;
+
+    if (t1 > 0 && t1 < t2) {
+        target = t1;
+    } else if (t2 > 0 && t2 < t1) {
+        target = t2;
+    } else {
+        return false;
     }
     vec3 position = ray.Origin + ray.Direction*target;
 
@@ -161,6 +171,7 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
 
     rayHit.Distance = target;
     rayHit.Material = cuboid.Material;
+    rayHit.FromInside = target == t2;
     rayHit.Position = position;
     rayHit.Normal = normalize(normal);
     return true;
@@ -210,21 +221,28 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
     return rayHit.Distance < RAY_MAX;
 }
 
-float BRDF(Ray ray, RayHit rayHit, out Ray newRay) {
+float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted) {
     float rayProbability;
     vec3 newRayDirection;
-    
+
     float reflectRoll = GetRandomFloat01();
     if (rayHit.Material.Specularity > reflectRoll) {
         newRayDirection = reflect(ray.Direction, rayHit.Normal);
         rayProbability = rayHit.Material.Specularity;
-    } else {
-        newRayDirection = CosineSampleHemisphere(rayHit.Normal);
-        rayProbability = 1.0f - rayHit.Material.Specularity;
+    } else if (rayHit.Material.Specularity + rayHit.Material.Refractivity > reflectRoll) {
+        newRayDirection = refract(ray.Direction, rayHit.Normal, rayHit.FromInside ? rayHit.Material.IndexOfRefraction:1.0f/rayHit.Material.IndexOfRefraction);
+        rayProbability = rayHit.Material.Refractivity;
+        refracted = true;
     }
+    else {
+        newRayDirection = CosineSampleHemisphere(rayHit.Normal);
+        rayProbability = 1.0f - rayHit.Material.Specularity - rayHit.Material.Refractivity;
+    }
+
     newRay.Direction = newRayDirection;
     newRay.Origin = rayHit.Position + newRay.Direction*0.001f;
-    return rayProbability;
+
+    return max(rayProbability, 0.001f);
 }
 
 // Gets the color of a given ray with all the bounces and stuff.
@@ -237,19 +255,27 @@ vec3 getColor(Ray ray)
     {
         if (GetRayIntersection(ray, rayHit))
         {
+            if (rayHit.FromInside) {
+                rayHit.Normal *= -1.0;
+            }
             // Mix the colors
             color += rayHit.Material.Emission * throughput;
+
+            // Get BSDF
+            bool refracted;
+            Ray newRay;
+            float rayProbability = BRDF(ray, rayHit, newRay, refracted);
+            ray = newRay;
+
             throughput *= rayHit.Material.Albedo;
-            float rayProbability = BRDF(ray, rayHit, ray);
             throughput /= rayProbability;
+
             // Russian roulette
             float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
             if (GetRandomFloat01() > propagationChance) {
                 break;
             }
             throughput /= propagationChance;
-
-            // Update ray
         }
         else
         {

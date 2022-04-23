@@ -104,16 +104,18 @@ public class Game : GameWindow {
     private void CreateScene() {
         _numSpheres = 0;
         _numCuboids = 0;
-        var whiteDiffuse = new Material(new Vector3(1, 1, 1), new Vector3(0));
-        var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0), 1.0f);
+        var whiteDiffuse = new Material(new Vector3(0.9f, 0.9f, 0.9f), new Vector3(0));
+        var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0), 0.02f, .98f, 1.1f);
+        var reflective = new Material(new Vector3(1, 1, 1), new Vector3(0), 0.98f, 0.02f);
         var redDiffuse = new Material(new Vector3(1, 0.3f, 0.3f), new Vector3(0.0f));
-        var greenDiffuse = new Material(new Vector3(0.2f, 0.8f, 0.2f), new Vector3(0));
+        var greenDiffuse = new Material(new Vector3(0.65f, 0.3f, 0.65f), new Vector3(0));
         var blueDiffuse = new Material(new Vector3(0.3f, 0.3f, 1), new Vector3(0));
 
         var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
+        var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 30.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 40.0f);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
         // Non emissive sphere
@@ -125,20 +127,25 @@ public class Game : GameWindow {
         GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
 
         // right wall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), whiteDiffuse, _numCuboids++));
 
         // left wall
-        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), whiteDiffuse, _numCuboids++));
 
         // backwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuseRefractive, _numCuboids++));
 
         // Frontwall
         GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
 
-        GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuseReflective, _numSpheres++));
-        GameObjects.Add(new Cuboid(new Vector3(2, 1, 3), new Vector3(4, 3, 5), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseReflective, _numSpheres++));
+        //GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuse, _numSpheres++));
+        GameObjects.Add(new Cuboid(new Vector3(0.5f, 2, 3), new Vector3(1.5f, 3, 4), whiteDiffuseRefractive, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(1, 1, -10), new Vector3(2, 2, 9), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseRefractive, _numSpheres++));
 
 
         // light

@@ -6,8 +6,8 @@ using OpenTK.Windowing.Desktop;
 using PathTracer;
 
 var gameWindowSettings = new GameWindowSettings();
-gameWindowSettings.RenderFrequency = 60;
-gameWindowSettings.UpdateFrequency = 60;
+gameWindowSettings.RenderFrequency = 144;
+gameWindowSettings.UpdateFrequency = 144;
 
 var nativeWindowSettings = new NativeWindowSettings();
 nativeWindowSettings.Size = new Vector2i(960, 540);
