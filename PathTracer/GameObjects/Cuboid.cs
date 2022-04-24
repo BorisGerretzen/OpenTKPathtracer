@@ -19,6 +19,9 @@ public class Cuboid : GameObject {
         Instance = instance;
     }
 
+    public Cuboid(Vector3 pos, float size, Material material, int instance) : this(new Vector3(pos.X - size / 2, pos.Y - size / 2, pos.Z - size / 2),
+        new Vector3(pos.X + size / 2, pos.Y + size / 2, pos.Z + size / 2), material, instance) { }
+    
     public override int BufferOffset => 256 * Sphere.SizeInBytes + Instance * SizeInBytes;
 
     public override Vector4[] GetGPUData() {
