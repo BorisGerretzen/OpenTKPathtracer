@@ -9,8 +9,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="OpenTK" Version="5.0.0-pre.7"/>
-        <PackageReference Include="System.Drawing.Common" Version="7.0.0-preview.3.22175.4"/>
+        <PackageReference Include="OpenTK" Version="5.0.0-pre.7" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.1" />
+        <PackageReference Include="System.Drawing.Common" Version="7.0.0-preview.3.22175.4" />
     </ItemGroup>
 
     <ItemGroup>
@@ -23,6 +24,28 @@
         <None Update="Shader\pathtracer.compute">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Update="Images\Skybox\POS_X.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Images\Skybox\NEG_Y.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Images\Skybox\POS_Z.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Images\Skybox\NEG_X.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Images\Skybox\POS_Y.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Images\Skybox\NEG_Z.jpg">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Images\Skybox" />
     </ItemGroup>
 
 </Project>

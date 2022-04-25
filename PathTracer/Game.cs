@@ -10,7 +10,11 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using PathTracer.Helpers;
-using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using Rectangle = System.Drawing.Rectangle;
 
 namespace PathTracer;
 
@@ -38,16 +42,19 @@ public class Game : GameWindow {
 
     private readonly Stopwatch _stopwatch = new();
     private TextureHandle _textureHandle;
+    private TextureHandle _skyboxTexture;
     private Vector2i _windowSize;
     private GLDebugProc callback;
 
-    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings) {
+    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
+        gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
         _windowSize.Y = nativeWindowSettings.Size.Y;
     }
 
-    private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam) {
+    private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity,
+        int length, IntPtr message, IntPtr userParam) {
         var errorString = source == DebugSource.DebugSourceApplication
             ? $"OpenGL - {Marshal.PtrToStringAnsi(message, length)}"
             : $"OpenGL - {Marshal.PtrToStringAnsi(message, length)}\n\tid:{id} severity:{severity} type:{type} source:{source}\n";
@@ -63,24 +70,30 @@ public class Game : GameWindow {
         GL.Enable(EnableCap.DebugOutputSynchronous);
         callback = OpenGlDebugCallback;
         GL.DebugMessageCallback(callback, IntPtr.Zero);
-        GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Debug callback initialized");
+        GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+            DebugSeverity.DebugSeverityNotification, -1, "Debug callback initialized");
 
         // Create basic data UBO
         GL.CreateBuffer(out _basicDataUbo);
-        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes);
+        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes, IntPtr.Zero,
+            BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
+            Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes);
 
         // Create GameObjects UBO
         GL.CreateBuffer(out _gameObjectsUbo);
-        GL.NamedBufferStorage(_gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, _gameObjectsUbo, IntPtr.Zero, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
+        GL.NamedBufferStorage(_gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes,
+            IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, _gameObjectsUbo, IntPtr.Zero,
+            _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
 
         // Create texture to render to
         _textureHandle = GL.CreateTexture(TextureTarget.Texture2d);
         GL.ActiveTexture(TextureUnit.Texture0);
         GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.TextureParameteri(_textureHandle, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
+            OpenTK.Graphics.OpenGL.PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
 
         // Create framebuffer to display rendered frame
         _framebufferHandle = GL.GenFramebuffer();
@@ -89,8 +102,32 @@ public class Game : GameWindow {
         GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _framebufferHandle);
         GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, new FramebufferHandle(0));
 
+        // Load skybox texture
+        _skyboxTexture = GL.GenTexture(); //GL.CreateTexture(TextureTarget.TextureCubeMap);
+        GL.ActiveTexture(TextureUnit.Texture1);
+        GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
+        
+        foreach (var file in Directory.GetFiles(@"Images\Skybox")) {
+            var image = SixLabors.ImageSharp.Image.Load(file);
+            image.Mutate(img => img.Rotate(180));
+            using (var ms = new MemoryStream()) {
+                image.Save(ms, new BmpEncoder());
+                GL.TexImage2D(Texture.CubeMapTextureTargetFromString(file), 0, (int)InternalFormat.Rgb, image.Width,
+                    image.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Bgr, PixelType.UnsignedByte, ms.ToArray());
+            }
+        }
+
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
+            (int)TextureMinFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter,
+            (int)TextureMagFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
+
         // Load compute shader
-        _shaderProgram = new ShaderProgram(new List<Shader> { new("Shader/pathtracer.compute", ShaderType.ComputeShader) });
+        _shaderProgram = new ShaderProgram(new List<Shader>
+            { new("Shader/pathtracer.compute", ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
         // Spawn objects
@@ -122,35 +159,38 @@ public class Game : GameWindow {
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
 
         // floor
-        GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
         // roof
-        GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
 
         // right wall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
 
         // left wall
-        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
 
         // backwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
 
         // Frontwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
 
         //GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuse, _numSpheres++));
-        GameObjects.Add(new Cuboid(new Vector3(3f, 2f, 4f), 2, whiteDiffuseRefractive, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(3f, 2f, 4f), 2, whiteDiffuseRefractive, _numCuboids++));
+        // GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseRefractive, _numSpheres++));
+
         //GameObjects.Add(new Sphere(new Vector3(3f, 4f, 4f), 1, whiteDiffuse, _numSpheres++));
         //GameObjects.Add(new Cuboid(new Vector3(1, 1, -10), new Vector3(2, 2, 9), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseRefractive, _numSpheres++));
 
 
         // light
-        GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight,
+        // _numCuboids++));
+
         // Emissive spheres 120 deg
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
         //GameObjects.Add(new Sphere(new Vector3(0.866f * 4f, 0, -0.5f * 4f), 1, redLight, _numSpheres++));
@@ -166,8 +206,10 @@ public class Game : GameWindow {
         _camera.AspectRatio = e.Width / (float)e.Height;
         _windowSize.X = e.Width;
         _windowSize.Y = e.Height;
-        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4, _camera.GetProjectionMatrix().Inverted());
-        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4,
+            _camera.GetProjectionMatrix().Inverted());
+        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
+            OpenTK.Graphics.OpenGL.PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
         _frameNumber = 0;
     }
 
@@ -186,9 +228,11 @@ public class Game : GameWindow {
 
         GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.BindImageTexture(0, _textureHandle, 0, 0, 0, BufferAccessARB.ReadWrite, InternalFormat.Rgba32f);
+        GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
         GL.DispatchCompute((uint)(_windowSize.X + 8 - 1) / 8, (uint)(_windowSize.Y + 4 - 1) / 4, 1);
         GL.MemoryBarrier(MemoryBarrierMask.TextureFetchBarrierBit);
-        GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+        GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y,
+            ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
         SwapBuffers();
     }
 
@@ -197,12 +241,15 @@ public class Game : GameWindow {
         var name = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString();
         GL.PixelStorei(PixelStoreParameter.PackAlignment, 1);
         var pixels = new byte[_windowSize.X * _windowSize.Y * 4];
-        GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
+        GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
         var fixedPixels = new byte[_windowSize.X * _windowSize.Y * 4];
 
-        for (var y = 0; y < _windowSize.Y; y++) Array.Copy(pixels, y * _windowSize.X * 4, fixedPixels, (_windowSize.X * _windowSize.Y - (y + 1) * _windowSize.X) * 4, _windowSize.X * 4);
+        for (var y = 0; y < _windowSize.Y; y++)
+            Array.Copy(pixels, y * _windowSize.X * 4, fixedPixels,
+                (_windowSize.X * _windowSize.Y - (y + 1) * _windowSize.X) * 4, _windowSize.X * 4);
         var bmp = new Bitmap(_windowSize.X, _windowSize.Y, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        var bmpData = bmp.LockBits(new Rectangle(0, 0, _windowSize.X, _windowSize.Y), ImageLockMode.WriteOnly, bmp.PixelFormat);
+        var bmpData = bmp.LockBits(new Rectangle(0, 0, _windowSize.X, _windowSize.Y), ImageLockMode.WriteOnly,
+            bmp.PixelFormat);
         Marshal.Copy(fixedPixels, 0, bmpData.Scan0, fixedPixels.Length);
         bmp.UnlockBits(bmpData);
         bmp.Save($"{name}.png", ImageFormat.Png);
@@ -222,14 +269,17 @@ public class Game : GameWindow {
         if (KeyboardState.IsKeyDown(Keys.L) && !_lastKeyboardState.IsKeyDown(Keys.L)) {
             _cameraLocked = !_cameraLocked;
             var lockState = _cameraLocked ? "locked" : "unlocked";
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
         }
 
         // Save image on press I
         if (KeyboardState.IsKeyDown(Keys.I) && !_lastKeyboardState.IsKeyDown(Keys.I)) {
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Starting image export");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, "Starting image export");
             SaveImage();
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
         }
 
 
@@ -290,8 +340,10 @@ public class Game : GameWindow {
         }
 
         if (cameraMoved || _frameNumber == 0) {
-            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4, _camera.GetViewMatrix().Inverted());
-            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes, _camera.Position);
+            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4,
+                _camera.GetViewMatrix().Inverted());
+            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes,
+                _camera.Position);
             _frameNumber = 0;
         }
     }
