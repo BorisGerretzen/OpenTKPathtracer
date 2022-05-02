@@ -26,17 +26,11 @@ public class Texture : IDisposable {
     public static TextureTarget CubeMapTextureTargetFromString(string name) {
         var pos = name.Contains("POS");
 
-        if (name.Contains("_X")) {
-            return pos ? TextureTarget.TextureCubeMapPositiveX : TextureTarget.TextureCubeMapNegativeX;
-        }
+        if (name.Contains("_X")) return pos ? TextureTarget.TextureCubeMapPositiveX : TextureTarget.TextureCubeMapNegativeX;
 
-        if (name.Contains("_Y")) {
-            return pos ? TextureTarget.TextureCubeMapPositiveY : TextureTarget.TextureCubeMapNegativeY;
-        }
+        if (name.Contains("_Y")) return pos ? TextureTarget.TextureCubeMapPositiveY : TextureTarget.TextureCubeMapNegativeY;
 
-        if (name.Contains("_Z")) {
-            return pos ? TextureTarget.TextureCubeMapPositiveZ : TextureTarget.TextureCubeMapNegativeZ;
-        }
+        if (name.Contains("_Z")) return pos ? TextureTarget.TextureCubeMapPositiveZ : TextureTarget.TextureCubeMapNegativeZ;
 
         throw new ArgumentException("Invalid name format");
     }

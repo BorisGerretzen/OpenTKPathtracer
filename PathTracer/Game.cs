@@ -10,11 +10,9 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using PathTracer.Helpers;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Bmp;
-using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-using Rectangle = System.Drawing.Rectangle;
+using Image = SixLabors.ImageSharp.Image;
+using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
 
 namespace PathTracer;
 
@@ -22,27 +20,27 @@ public class Game : GameWindow {
     private readonly int _maxCuboids = 64;
 
     private readonly int _maxSpheres = 256;
+
+    private readonly Stopwatch _stopwatch = new();
     public readonly List<GameObject> GameObjects = new();
 
     private BufferHandle _basicDataUbo;
     private Camera _camera;
 
     private bool _cameraLocked;
-    private uint _lastFrameCount;
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
     private uint _frameNumber;
     private BufferHandle _gameObjectsUbo;
+    private uint _lastFrameCount;
 
     private KeyboardState _lastKeyboardState;
     private Vector2 _lastPos;
     private int _numCuboids;
     private int _numSpheres;
     private ShaderProgram _shaderProgram;
-
-    private readonly Stopwatch _stopwatch = new();
-    private TextureHandle _textureHandle;
     private TextureHandle _skyboxTexture;
+    private TextureHandle _textureHandle;
     private Vector2i _windowSize;
     private GLDebugProc callback;
 
@@ -63,6 +61,8 @@ public class Game : GameWindow {
     }
 
     protected override void OnLoad() {
+        GL.Enable(EnableCap.TextureCubeMapSeamless);
+
         base.OnLoad();
 
         // Enable debugging
@@ -88,12 +88,12 @@ public class Game : GameWindow {
             _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
 
         // Create texture to render to
-        _textureHandle = GL.CreateTexture(TextureTarget.Texture2d);
         GL.ActiveTexture(TextureUnit.Texture0);
+        _textureHandle = GL.CreateTexture(TextureTarget.Texture2d);
         GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.TextureParameteri(_textureHandle, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
         GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
-            OpenTK.Graphics.OpenGL.PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+            PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
 
         // Create framebuffer to display rendered frame
         _framebufferHandle = GL.GenFramebuffer();
@@ -103,19 +103,20 @@ public class Game : GameWindow {
         GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, new FramebufferHandle(0));
 
         // Load skybox texture
-        _skyboxTexture = GL.GenTexture(); //GL.CreateTexture(TextureTarget.TextureCubeMap);
         GL.ActiveTexture(TextureUnit.Texture1);
+        _skyboxTexture = GL.CreateTexture(TextureTarget.TextureCubeMap); //GL.CreateTexture(TextureTarget.TextureCubeMap);
         GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
-        
-        foreach (var file in Directory.GetFiles(@"Images\Skybox")) {
-            var image = SixLabors.ImageSharp.Image.Load(file);
-            image.Mutate(img => img.Rotate(180));
-            using (var ms = new MemoryStream()) {
-                image.Save(ms, new BmpEncoder());
-                GL.TexImage2D(Texture.CubeMapTextureTargetFromString(file), 0, (int)InternalFormat.Rgb, image.Width,
-                    image.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Bgr, PixelType.UnsignedByte, ms.ToArray());
+        var rnd = new Random();
+
+        foreach (var file in Directory.GetFiles(@"Images\Skybox"))
+            using (var image = Image.Load(file)) {
+                image.Mutate(img => img.Flip(FlipMode.Horizontal));
+                using (var ms = new MemoryStream()) {
+                    image.Save(ms, new RawBytesEncoder());
+                    GL.TexImage2D(Texture.CubeMapTextureTargetFromString(file), 0, (int)InternalFormat.Rgb, 2048,
+                        2048, 0, PixelFormat.Rgb, PixelType.UnsignedByte, ms.ToArray());
+                }
             }
-        }
 
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
             (int)TextureMinFilter.Linear);
@@ -124,6 +125,7 @@ public class Game : GameWindow {
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
+
 
         // Load compute shader
         _shaderProgram = new ShaderProgram(new List<Shader>
@@ -142,7 +144,7 @@ public class Game : GameWindow {
         _numSpheres = 0;
         _numCuboids = 0;
         var whiteDiffuse = new Material(new Vector3(0.9f, 0.9f, 0.9f), new Vector3(0));
-        var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0), 0.2f, .8f, 1.2f);
+        var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0), 0.0f, 0.9f, 1.52f);
         var reflective = new Material(new Vector3(1, 1, 1), new Vector3(0), 0.98f, 0.02f);
         var redDiffuse = new Material(new Vector3(1, 0.3f, 0.3f), new Vector3(0.0f));
         var greenDiffuse = new Material(new Vector3(0.65f, 0.3f, 0.65f), new Vector3(0));
@@ -159,37 +161,37 @@ public class Game : GameWindow {
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
 
         // floor
-        // GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
         // roof
-        // GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
 
         // right wall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
 
         // left wall
-        // GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
 
         // backwall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuseRefractive, _numCuboids++));
 
         // Frontwall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
 
-        //GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuse, _numSpheres++));
-        // GameObjects.Add(new Cuboid(new Vector3(3f, 2f, 4f), 2, whiteDiffuseRefractive, _numCuboids++));
-        // GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseRefractive, _numSpheres++));
+        //GameObjects.Add(new Cuboid(new Vector3(0, 0, 0), 1, whiteDiffuseRefractive, _numCuboids++));
+        //GameObjects.Add(new Cuboid(new Vector3(0, 1, 0), 0.5f, whiteLight, _numCuboids++));
+        GameObjects.Add(new Cuboid(new Vector3(3f, 2f, 4f), 2, whiteDiffuse, _numCuboids++));
+        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuse, _numSpheres++));
 
-        //GameObjects.Add(new Sphere(new Vector3(3f, 4f, 4f), 1, whiteDiffuse, _numSpheres++));
+        GameObjects.Add(new Sphere(new Vector3(3f, 4f, 4f), 1, whiteDiffuse, _numSpheres++));
         //GameObjects.Add(new Cuboid(new Vector3(1, 1, -10), new Vector3(2, 2, 9), whiteDiffuse, _numCuboids++));
 
 
         // light
-        // GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight,
-        // _numCuboids++));
+        //GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight, _numCuboids++));
 
         // Emissive spheres 120 deg
         //GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
@@ -208,8 +210,9 @@ public class Game : GameWindow {
         _windowSize.Y = e.Height;
         GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4,
             _camera.GetProjectionMatrix().Inverted());
+        GL.ActiveTexture(TextureUnit.Texture0);
         GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
-            OpenTK.Graphics.OpenGL.PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+            PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
         _frameNumber = 0;
     }
 
@@ -226,13 +229,23 @@ public class Game : GameWindow {
         _shaderProgram.SetUniformUInt(0, _frameNumber++);
         _shaderProgram.SetUniformVec2(1, new Vector2(_numSpheres, _numCuboids));
 
-        GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
-        GL.BindImageTexture(0, _textureHandle, 0, 0, 0, BufferAccessARB.ReadWrite, InternalFormat.Rgba32f);
+        // GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
+            (int)TextureMinFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter,
+            (int)TextureMagFilter.Nearest);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
+
+        GL.BindImageTexture(0, _textureHandle, 0, 0, 0, BufferAccessARB.ReadWrite, InternalFormat.Rgba32f);
+
         GL.DispatchCompute((uint)(_windowSize.X + 8 - 1) / 8, (uint)(_windowSize.Y + 4 - 1) / 4, 1);
         GL.MemoryBarrier(MemoryBarrierMask.TextureFetchBarrierBit);
         GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y,
             ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+        GL.ActiveTexture(TextureUnit.Texture0);
         SwapBuffers();
     }
 
@@ -241,7 +254,7 @@ public class Game : GameWindow {
         var name = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString();
         GL.PixelStorei(PixelStoreParameter.PackAlignment, 1);
         var pixels = new byte[_windowSize.X * _windowSize.Y * 4];
-        GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
+        GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
         var fixedPixels = new byte[_windowSize.X * _windowSize.Y * 4];
 
         for (var y = 0; y < _windowSize.Y; y++)

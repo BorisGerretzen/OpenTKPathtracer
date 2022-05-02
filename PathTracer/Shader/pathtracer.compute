@@ -240,7 +240,7 @@ float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted) {
         rayProbability = 1.0f - rayHit.Material.Specularity - rayHit.Material.Refractivity;
     }
 
-    newRay.Direction = newRayDirection;
+    newRay.Direction = normalize(newRayDirection);
     newRay.Origin = rayHit.Position + newRay.Direction*0.001f;
 
     return max(rayProbability, 0.001f);
@@ -280,7 +280,8 @@ vec3 getColor(Ray ray)
         }
         else
         {
-            color += texture(skybox, ray.Direction).rgb*throughput;
+            //color += normalize(ray.Direction);
+            color += texture(skybox, ray.Direction).rgb * throughput;
             //color += throughput * vec3(0.3f);
             break;
         }
@@ -302,6 +303,7 @@ void main()
         vec2 offset = vec2(GetRandomFloat01(), GetRandomFloat01());
         vec2 normalizedDeviceCoordinates = vec2(pos+offset) / vec2(imageSize(imgOut)) * 2 - 1;
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition, normalizedDeviceCoordinates);
+        //color += ray.Direction;
         color += getColor(ray);
     }
 

@@ -8,10 +8,10 @@ public class Material : Uploadable {
     private readonly Vector4[] _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
     public Vector3 Albedo;
     public Vector3 Emission;
-    public float Specularity;
-    public float Refractive;
 
     public float IndexOfRefraction;
+    public float Refractive;
+    public float Specularity;
 
     public Material(Vector3 albedo, Vector3 emission, float specularity = 0.0f, float refractive = 0.0f, float indexOfRefraction = 0.0f) {
         Albedo = albedo;
