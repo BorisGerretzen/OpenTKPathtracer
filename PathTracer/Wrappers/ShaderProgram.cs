@@ -27,12 +27,12 @@ public class ShaderProgram : IDisposable {
         GL.ProgramUniform1ui(Handle, location, value);
     }
 
-    public unsafe void SetUniformVec2(int location, Vector2 vector2) {
-        var vec = new float[2];
+    public unsafe void SetUniformVec2(int location, Vector2i vector2) {
+        var vec = new int[2];
         vec[0] = vector2.X;
         vec[1] = vector2.Y;
-        fixed (float* ptr = &vec[0]) {
-            GL.ProgramUniform2fv(Handle, location, 1, ptr);
+        fixed (int* ptr = &vec[0]) {
+            GL.ProgramUniform2iv(Handle, location, 1, ptr);
         }
     }
 }

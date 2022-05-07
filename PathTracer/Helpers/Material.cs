@@ -3,9 +3,18 @@
 namespace PathTracer.Helpers;
 
 public class Material : Uploadable {
+    #region default materials
+
+    public static Material WhiteDiffuse = new(Vector3.One, Vector3.Zero);
+    public static Material WhiteLight = new(Vector3.One, Vector3.One);
+    public static Material FullSpecular = new(Vector3.One, Vector3.Zero, 1.0f);
+
+    #endregion
+    
+    
     public static int SizeInBytes = Vector4.SizeInBytes * 3;
 
-    private readonly Vector4[] _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
+    private Vector4[] _gpuData;
     public Vector3 Albedo;
     public Vector3 Emission;
 
@@ -24,6 +33,7 @@ public class Material : Uploadable {
     public override int BufferOffset => throw new NotSupportedException("Do not upload directly");
 
     public override Vector4[] GetGPUData() {
+        _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
         _gpuData[0].Xyz = Emission;
         _gpuData[0].W = Specularity;
         _gpuData[1].Xyz = Albedo;

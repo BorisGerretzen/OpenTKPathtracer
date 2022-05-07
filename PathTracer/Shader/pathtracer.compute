@@ -1,11 +1,13 @@
 ﻿#version 450 core
 #define RAYS_PER_PIXEL 1
-#define RAY_DEPTH 13
+#define RAY_DEPTH 5
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
 layout (binding=0, rgba32f) uniform image2D imgOut;
 layout (binding=1) uniform samplerCube skybox;
+layout (location=0) uniform uint currentFrameIndex;
+layout (location=1) uniform ivec2 gameObjectsSize;
 
 // ---------- Structs ---------- //
 struct Material
@@ -26,7 +28,6 @@ struct Sphere
 
 struct Cuboid
 {
-// No hit support for cuboids yet so dont use them
     vec3 Min;
     vec3 Max;
     Material Material;
@@ -47,6 +48,30 @@ struct RayHit
     Material Material;
 };
 
+struct Vertex {
+    vec3 Position;
+    vec3 Normal;
+    vec2 TextureCoordinates;
+};
+
+struct Mesh {
+    uint FirstVertexIndex;
+    uint FirstIndicesIndex;
+    vec3 AABBMin;
+    vec3 AABBMax;
+    Material Material;
+//sampler2D DiffuseMap;
+//sampler2D SpecularityMap;
+//sampler2D RefractMap;
+};
+
+struct Triangle {
+    int index1;
+    int index2;
+    int index3;
+    int index4;
+};
+
 // ---------- End structs ---------- //
 
 // ---------- Inputs ---------- //
@@ -65,9 +90,16 @@ uniform GameObjectsUBO {
     Sphere Spheres[256];
     Cuboid Cuboids[64];
 } gameObjectsUBO;
+layout(std140, binding=2) buffer MeshSSBO {
+    Mesh Meshes[];
+} meshSSBO;
+layout(std140, binding=3) buffer VerticesSSBO {
+    Vertex Vertices[];
+} verticesSSBO;
+layout(std430, binding=4) buffer IndicesSSBO {
+    Triangle Indices[];
+} indicesSSBO;
 
-layout (location=0) uniform uint currentFrameIndex;
-layout (location=1) uniform vec2 gameObjectsSize;
 // ---------- End inputs ---------- //
 
 uint rndSeed;
@@ -178,6 +210,40 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
     return true;
 }
 
+bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, out RayHit rayHit) {
+    vec3 v1v2 = v2.Position - v1.Position;
+    vec3 v1v3 = v3.Position - v1.Position;
+    vec3 normal = cross(v1v2, v1v3);
+    float dotNormalDirection = dot(ray.Direction, normal);
+
+    // Ray parallel to the plane -> no intersection
+    if (abs(dotNormalDirection) < 0.001f) {
+        return false;
+    }
+
+    float t = (dot(v1.Position, normal)-dot(ray.Origin, normal))/dotNormalDirection;
+    if (t<0) {
+        return false;
+    }
+    vec3 planeIntersection = ray.Origin + ray.Direction*t;
+
+    if (dot(cross((v2.Position-v1.Position), (planeIntersection-v1.Position)), normal) < 0) {
+        return false;
+    }
+    if (dot(cross((v3.Position-v2.Position), (planeIntersection-v2.Position)), normal) < 0) {
+        return false;
+    }
+    if (dot(cross((v1.Position-v3.Position), (planeIntersection-v3.Position)), normal) < 0) {
+        return false;
+    }
+
+    rayHit.Distance = t;
+    rayHit.Position = planeIntersection;
+    rayHit.FromInside = false;
+    rayHit.Normal = normalize(normal);
+    return true;
+}
+
 // Creates a ray from given normalized device coordinates into the scene in world coordinates.
 Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 viewPos, vec2 normalizedDeviceCoords)
 {
@@ -194,6 +260,7 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
     return Ray(viewPos, rayWorld);
 }
 
+
 // Checks if a given ray intersects any gameobject in the scene.
 // If so, rayHit will be populated with the data of the intersection closest to the camera.
 bool GetRayIntersection(Ray ray, out RayHit rayHit)
@@ -209,7 +276,6 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
             }
         }
     }
-
     for (int i = 0; i < gameObjectsSize.y; i++) {
         Cuboid cuboid = gameObjectsUBO.Cuboids[i];
 
@@ -219,6 +285,29 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
             }
         }
     }
+
+    for (int i = 0; i < indicesSSBO.Indices.length(); i++) {
+        int i1 = indicesSSBO.Indices[i].index1;
+        int i2 = indicesSSBO.Indices[i].index2;
+        int i3 = indicesSSBO.Indices[i].index3;
+        Vertex v1 = verticesSSBO.Vertices[i1];
+        Vertex v2 = verticesSSBO.Vertices[i2];
+        Vertex v3 = verticesSSBO.Vertices[i3];
+
+        if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
+                    Mesh mesh = meshSSBO.Meshes[m];
+                    if (i >= mesh.FirstIndicesIndex) {
+                        loopRayHit.Material = mesh.Material;
+                        break;
+                    }
+                }
+                rayHit = loopRayHit;
+            }
+        }
+    }
+
     return rayHit.Distance < RAY_MAX;
 }
 
@@ -252,6 +341,7 @@ vec3 getColor(Ray ray)
     RayHit rayHit;
     vec3 color = vec3(0.0);
     vec3 throughput = vec3(1.0);
+
     for (int i = 0; i < RAY_DEPTH; i++)
     {
         if (GetRayIntersection(ray, rayHit))
@@ -304,7 +394,8 @@ void main()
         vec2 normalizedDeviceCoordinates = vec2(pos+offset) / vec2(imageSize(imgOut)) * 2 - 1;
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition, normalizedDeviceCoordinates);
         //color += ray.Direction;
-        color += getColor(ray);
+        vec3 newC = getColor(ray);
+        color += newC;
     }
 
     color /= RAYS_PER_PIXEL;

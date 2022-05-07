@@ -7,11 +7,13 @@ In the compute shader a couple ways to improve the rendering time and quality ar
 - Russian roulette is used to terminate rays before they reach their depth limit, the chance for a path to be terminated becomes bigger with each bounce. The rays that do make it further are in turn weighted heavier than the ones that do not.
 - Antialiasing is implemented by offsetting each ray by a tiny sub-pixel amount. this fuzzes the edges enough to make them seem smooth.
 - The program supports progressive rendering by averaging the pixels from previous frames together.
+- A skybox is included to provide global illumination and some nice scenery
 
 Currently, the following material options are supported:
 - Fully diffuse materials
 - Fully specular materials
 - Glossy materials (mix of specular and diffuse)
+- Refractive materials
 
 ## How to use
 You can move around in the scene using the ```WASD``` buttons, the ```spacebar``` and ```left shift``` are used to go up and down respectively.\

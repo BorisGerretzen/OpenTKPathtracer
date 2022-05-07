@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="CjClutter.ObjLoader" Version="1.0.0"/>
         <PackageReference Include="OpenTK" Version="5.0.0-pre.7"/>
         <PackageReference Include="SixLabors.ImageSharp" Version="2.1.1"/>
         <PackageReference Include="System.Drawing.Common" Version="7.0.0-preview.3.22175.4"/>
@@ -78,10 +79,16 @@
         <None Update="Images\Skybox2\POS_Z.png">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Update="models\teapot.obj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="models\bunny.obj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Images\Skyboxtee"/>
+        <Folder Include="models"/>
     </ItemGroup>
 
 </Project>
