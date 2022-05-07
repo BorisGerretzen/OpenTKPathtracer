@@ -16,7 +16,7 @@ public class Mesh : Uploadable {
     public Vector3 AABBMax;
 
     public int? VertexStartOffset;
-    public int? IndicesStartOffset;
+    public int? TrianglesStartOffset;
 
     public Mesh(List<Vertex> vertices, List<Triangle> triangles, Material material, Vector3 position, Vector3 aabbMin, Vector3 aabbMax) {
         Vertices = vertices;
@@ -31,7 +31,7 @@ public class Mesh : Uploadable {
     public override int BufferOffset => throw new NotSupportedException("Do not upload directly");
 
     public override Vector4[] GetGPUData() {
-        if (VertexStartOffset == null || IndicesStartOffset == null) throw new Exception("Start offsets are 0, do not use this class directly.");
+        if (VertexStartOffset == null || TrianglesStartOffset == null) throw new Exception("Start offsets are 0, do not use this class directly.");
 
         var returnData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
         returnData[0].Z = Triangles.Count;

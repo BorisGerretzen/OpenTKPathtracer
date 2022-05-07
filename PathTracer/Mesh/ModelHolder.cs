@@ -56,7 +56,7 @@ public class ModelHolder {
     public void AddMesh(Mesh mesh) {
         _meshes.Add(mesh);
         mesh.VertexStartOffset = _vertices.Count;
-        mesh.IndicesStartOffset = _triangles.Count / 3;
+        mesh.TrianglesStartOffset = _triangles.Count;
         _vertices.AddRange(mesh.Vertices);
         _triangles.AddRange(mesh.Triangles);
     }
