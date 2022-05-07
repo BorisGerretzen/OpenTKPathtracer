@@ -9,7 +9,7 @@ namespace PathTracer;
 public class ModelHolder {
     private readonly List<Mesh> _meshes;
     private readonly List<Vertex> _vertices;
-    private readonly List<int> _indices;
+    private readonly List<Triangle> _triangles;
 
     private readonly BufferHandle _vertexBufferHandle;
     private readonly BufferHandle _indicesBufferHandle;
@@ -22,7 +22,7 @@ public class ModelHolder {
         _meshBufferHandle = meshBufferHandle;
         _meshes = new List<Mesh>();
         _vertices = new List<Vertex>();
-        _indices = new List<int>();
+        _triangles = new List<Triangle>();
         _objLoader = new ObjLoaderFactory().Create();
     }
 
@@ -31,41 +31,40 @@ public class ModelHolder {
         var fileStream = File.Open("models/teapot.obj", FileMode.Open);
         var result = _objLoader.Load(fileStream);
         var vertices = new List<Vertex>();
-        var indices = new List<int>();
-        var MinVertex = Vector3.PositiveInfinity;
-        var MaxVertex = Vector3.NegativeInfinity;
+        var triangles = new List<Triangle>();
+        var minVertex = Vector3.PositiveInfinity;
+        var maxVertex = Vector3.NegativeInfinity;
         foreach (var vertex in result.Vertices) {
-            if (vertex.X < MinVertex.X) MinVertex.X = vertex.X;
-            if (vertex.Y < MinVertex.Y) MinVertex.Y = vertex.Y;
-            if (vertex.Z < MinVertex.Z) MinVertex.Z = vertex.Z;
-            if (vertex.X > MinVertex.X) MaxVertex.X = vertex.X;
-            if (vertex.Y > MinVertex.Y) MaxVertex.Y = vertex.Y;
-            if (vertex.Z > MinVertex.Z) MaxVertex.Z = vertex.Z;
+            if (vertex.X < minVertex.X) minVertex.X = vertex.X;
+            if (vertex.Y < minVertex.Y) minVertex.Y = vertex.Y;
+            if (vertex.Z < minVertex.Z) minVertex.Z = vertex.Z;
+            if (vertex.X > minVertex.X) maxVertex.X = vertex.X;
+            if (vertex.Y > minVertex.Y) maxVertex.Y = vertex.Y;
+            if (vertex.Z > minVertex.Z) maxVertex.Z = vertex.Z;
             vertices.Add(new Vertex(new Vector3(vertex.X, vertex.Y, vertex.Z), Vector3.One, Vector2.One));
         }
 
         foreach (var group in result.Groups)
         foreach (var face in group.Faces) {
-            indices.Add(face[0].VertexIndex - 1);
-            indices.Add(face[1].VertexIndex - 1);
-            indices.Add(face[2].VertexIndex - 1);
+            var t = new Triangle(face[0].VertexIndex - 1, face[1].VertexIndex - 1, face[2].VertexIndex - 1);
+            triangles.Add(t);
         }
 
-        AddMesh(new Mesh(vertices, indices, material, position, MinVertex, MaxVertex));
+        AddMesh(new Mesh(vertices, triangles, material, position, minVertex, maxVertex));
     }
 
     public void AddMesh(Mesh mesh) {
         _meshes.Add(mesh);
-        mesh.VertexStartOffset = (uint)_vertices.Count;
-        mesh.IndicesStartOffset = (uint)_indices.Count;
+        mesh.VertexStartOffset = _vertices.Count;
+        mesh.IndicesStartOffset = _triangles.Count / 3;
         _vertices.AddRange(mesh.Vertices);
-        _indices.AddRange(mesh.Indices);
+        _triangles.AddRange(mesh.Triangles);
     }
 
     public void UploadModels() {
         var gpuMeshes = new Vector4[_meshes.Count * (Mesh.SizeInBytes / Vector4.SizeInBytes)];
         var gpuVertices = new Vector4[_vertices.Count * (Vertex.SizeInBytes / Vector4.SizeInBytes)];
-        var gpuIndices = new Vector4i[(int)Math.Ceiling(_indices.Count / 3.0)];
+        var gpuTriangles = new Vector4i[_triangles.Count * (Triangle.SizeInBytes / Vector4.SizeInBytes)];
 
         // Convert meshes into vector4 array
         for (var i = 0; i < _meshes.Count; i++) {
@@ -82,19 +81,17 @@ public class ModelHolder {
         }
 
         // Convert indices into vector4 array
-        var indexIndex = 0;
-        for (var i = 0; i < (int)Math.Ceiling(_indices.Count / 3.0); i++) {
-            gpuIndices[i].X = _indices[indexIndex];
-            gpuIndices[i].Y = _indices[indexIndex + 1];
-            gpuIndices[i].Z = _indices[indexIndex + 2];
-            indexIndex += 3;
+        for (var i = 0; i < _triangles.Count; i++) {
+            var triangle = _triangles[i];
+            var gpuTriangle = triangle.GetGPUData();
+            Array.Copy(gpuTriangle, 0, gpuTriangles, i * (Triangle.SizeInBytes / Vector4.SizeInBytes), gpuTriangle.Length);
         }
 
         // Beam em up
         var meshBufferSize = Vector4.SizeInBytes * gpuMeshes.Length;
         var vertexBufferSize = Vector4.SizeInBytes * gpuVertices.Length;
-        var indicesBufferSize = Vector4.SizeInBytes * gpuIndices.Length;
-        if (meshBufferSize == 0 || vertexBufferSize == 0 || indicesBufferSize == 0) return;
+        var trianglesBufferSize = Vector4.SizeInBytes * gpuTriangles.Length;
+        if (meshBufferSize == 0 || vertexBufferSize == 0 || trianglesBufferSize == 0) return;
         GL.NamedBufferStorage(_meshBufferHandle, meshBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 2, _meshBufferHandle, IntPtr.Zero, meshBufferSize);
         GL.NamedBufferSubData(_meshBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuMeshes.Length, gpuMeshes);
@@ -103,8 +100,8 @@ public class ModelHolder {
         GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 3, _vertexBufferHandle, IntPtr.Zero, vertexBufferSize);
         GL.NamedBufferSubData(_vertexBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuVertices.Length, gpuVertices);
 
-        GL.NamedBufferStorage(_indicesBufferHandle, indicesBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 4, _indicesBufferHandle, IntPtr.Zero, indicesBufferSize);
-        GL.NamedBufferSubData(_indicesBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuIndices.Length, gpuIndices);
+        GL.NamedBufferStorage(_indicesBufferHandle, trianglesBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 4, _indicesBufferHandle, IntPtr.Zero, trianglesBufferSize);
+        GL.NamedBufferSubData(_indicesBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuTriangles.Length, gpuTriangles);
     }
 }

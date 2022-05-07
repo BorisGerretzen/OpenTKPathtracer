@@ -8,19 +8,19 @@ public class Mesh : Uploadable {
 
     public List<Vertex> Vertices;
 
-    public List<int> Indices;
+    public List<Triangle> Triangles;
     //public List<GameTexture> Textures;
 
     public Material Material;
     public Vector3 AABBMin;
     public Vector3 AABBMax;
 
-    public uint? VertexStartOffset;
-    public uint? IndicesStartOffset;
+    public int? VertexStartOffset;
+    public int? IndicesStartOffset;
 
-    public Mesh(List<Vertex> vertices, List<int> indices, Material material, Vector3 position, Vector3 aabbMin, Vector3 aabbMax) {
+    public Mesh(List<Vertex> vertices, List<Triangle> triangles, Material material, Vector3 position, Vector3 aabbMin, Vector3 aabbMax) {
         Vertices = vertices;
-        Indices = indices;
+        Triangles = triangles;
         Material = material;
         AABBMin = aabbMin;
         AABBMax = aabbMax;
@@ -34,6 +34,7 @@ public class Mesh : Uploadable {
         if (VertexStartOffset == null || IndicesStartOffset == null) throw new Exception("Start offsets are 0, do not use this class directly.");
 
         var returnData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
+        returnData[0].Z = Triangles.Count;
         returnData[1].Xyz = AABBMin;
         returnData[2].Xyz = AABBMax;
         var materialData = Material.GetGPUData();
