@@ -77,8 +77,8 @@ public class Camera {
 
     // Get the view matrix using the amazing LookAt function described more in depth on the web tutorials
     public Matrix4 GetViewMatrix() {
-        //return Matrix4.LookAt(Position, Position + _front, Up);
-        return Matrix4.LookAt(Position, new Vector3(5, 1, 5), Up);
+        return Matrix4.LookAt(Position, Position + _front, Up);
+        // return Matrix4.LookAt(Position, new Vector3(5, 1, 5), Up);
     }
 
     // Get the projection matrix using the same method we have used up until this point

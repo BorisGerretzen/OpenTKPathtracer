@@ -1,8 +1,9 @@
 ﻿#version 450 core
 #define RAYS_PER_PIXEL 1
-#define RAY_DEPTH 5
+#define RAY_DEPTH 2
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
+#define MAX_TRIANGLES 255
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
 layout (binding=0, rgba32f) uniform image2D imgOut;
 layout (binding=1) uniform samplerCube skybox;
@@ -53,18 +54,6 @@ struct Vertex {
     vec3 Normal;
     vec2 TextureCoordinates;
 };
-
-struct Mesh {
-    uint FirstVertexIndex;
-    uint FirstIndicesIndex;
-    vec3 AABBMin;
-    vec3 AABBMax;
-    Material Material;
-//sampler2D DiffuseMap;
-//sampler2D SpecularityMap;
-//sampler2D RefractMap;
-};
-
 struct Triangle {
     int index1;
     int index2;
@@ -72,21 +61,36 @@ struct Triangle {
     int index4;
 };
 
+struct BVHNode {
+    int ParentIndex;
+    int Children[2];
+    int NumTriangles;
+    vec3 AABBMin;
+    vec3 AABBMax;
+    Triangle Triangles[MAX_TRIANGLES];
+};
+
+struct Mesh {
+    int BVHIndex;
+    Material Material;
+//sampler2D DiffuseMap;
+//sampler2D SpecularityMap;
+//sampler2D RefractMap;
+};
+
+
 // ---------- End structs ---------- //
 
 // ---------- Inputs ---------- //
 // Some linear algebra magic
-layout(std140, binding = 0)
-uniform BasicDataUBO
-{
+layout(std140, binding = 0) uniform BasicDataUBO {
     mat4 InverseProjectionMatrix;
     mat4 InverseViewMatrix;
     vec3 ViewPosition;
 } basicDataUBO;
 
 // Game objects that will be rendered
-layout(std140, binding = 1)
-uniform GameObjectsUBO {
+layout(std140, binding = 1) uniform GameObjectsUBO {
     Sphere Spheres[256];
     Cuboid Cuboids[64];
 } gameObjectsUBO;
@@ -96,10 +100,17 @@ layout(std140, binding=2) buffer MeshSSBO {
 layout(std140, binding=3) buffer VerticesSSBO {
     Vertex Vertices[];
 } verticesSSBO;
-layout(std430, binding=4) buffer IndicesSSBO {
-    Triangle Indices[];
-} indicesSSBO;
+layout(std430, binding=4) buffer TrianglesSSBO {
+    Triangle Triangles[];
+} trianglesSSBO;
 
+// BVH
+layout(std140, binding = 5) uniform BVHMetadata {
+    int NumBVs;
+} bvhMetaData;
+layout(std430, binding=6) buffer BVHSSBO {
+    BVHNode BVHNodes[];
+} bvhSSBO;
 // ---------- End inputs ---------- //
 
 uint rndSeed;
@@ -260,7 +271,6 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
     return Ray(viewPos, rayWorld);
 }
 
-
 // Checks if a given ray intersects any gameobject in the scene.
 // If so, rayHit will be populated with the data of the intersection closest to the camera.
 bool GetRayIntersection(Ray ray, out RayHit rayHit)
@@ -286,27 +296,70 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
         }
     }
 
-    for (int i = 0; i < indicesSSBO.Indices.length(); i++) {
-        int i1 = indicesSSBO.Indices[i].index1;
-        int i2 = indicesSSBO.Indices[i].index2;
-        int i3 = indicesSSBO.Indices[i].index3;
-        Vertex v1 = verticesSSBO.Vertices[i1];
-        Vertex v2 = verticesSSBO.Vertices[i2];
-        Vertex v3 = verticesSSBO.Vertices[i3];
+    for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
+        Mesh mesh = meshSSBO.Meshes[m];
+        int numBVHs = bvhMetaData.NumBVs;
 
-        if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
-            if (loopRayHit.Distance < rayHit.Distance) {
-                for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
-                    Mesh mesh = meshSSBO.Meshes[m];
-                    if (i >= mesh.FirstIndicesIndex) {
-                        loopRayHit.Material = mesh.Material;
-                        break;
+        // Very rudamentary queue
+        int queue[numBVHs];
+        int readPointer = 0;
+        int writePointer = 1;
+
+        queue[0] = mesh.BVHIndex;
+        while (readPointer < numBVHs) {
+            BVHNode node = bvhSSBO.BVHNodes[queue[readPointer]];
+            RayHit rayHitRoot;
+            if (rayIntersectCuboid(ray, Cuboid(node.AABBMin, node.AABBMax, mesh.Material), rayHitRoot)) {
+                // If leaf node, loop over triangles
+                if (node.NumTriangles > 0) {
+                    for (int i = 0; i < node.NumTriangles; i++) {
+                        Triangle triangle = node.Triangles[i];
+                        Vertex v1 = verticesSSBO.Vertices[triangle.index1];
+                        Vertex v2 = verticesSSBO.Vertices[triangle.index2];
+                        Vertex v3 = verticesSSBO.Vertices[triangle.index3];
+
+                        // If closer than current -> make current
+                        if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+                            if (loopRayHit.Distance < rayHit.Distance) {
+                                rayHit = loopRayHit;
+                            }
+                        }
                     }
+                    continue;
                 }
-                rayHit = loopRayHit;
+
+                // If not leaf node, add children to queue
+                queue[writePointer] = node.Children[0];
+                writePointer++;
+                queue[writePointer] = node.Children[1];
+                writePointer++;
+
+                readPointer++;
             }
         }
     }
+
+    //    for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
+    //        Mesh mesh = meshSSBO.Meshes[m];
+    //        RayHit cuboidRayHit;
+    //        if(rayIntersectCuboid(ray, Cuboid(mesh.AABBMin, mesh.AABBMax, mesh.Material), cuboidRayHit)) {
+    //            for(int i = 0; i < 6230; i++) {
+    //                int triangleIndex = mesh.FirstIndicesIndex + i;
+    //                Triangle t = indicesSSBO.Indices[triangleIndex];
+    //                int i1 = t.index1;
+    //                int i2 = t.index2;
+    //                int i3 = t.index3;
+    //                Vertex v1 = verticesSSBO.Vertices[i1];
+    //                Vertex v2 = verticesSSBO.Vertices[i2];
+    //                Vertex v3 = verticesSSBO.Vertices[i3];
+    //                if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+    //                    if(loopRayHit.Distance < rayHit.Distance) {
+    //                        rayHit = loopRayHit;
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
 
     return rayHit.Distance < RAY_MAX;
 }

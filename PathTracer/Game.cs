@@ -61,7 +61,7 @@ public class Game : GameWindow {
     }
 
     private void LoadMeshes() {
-        _modelHolder.AddModel("models/teapot.obj", Material.FullSpecular, new Vector3(5, 1, 5));
+        _modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(5, 1, 2));
     }
     
     protected override void OnLoad() {
@@ -135,16 +135,20 @@ public class Game : GameWindow {
             { new("Shader/pathtracer.compute", ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
-        // Create Vertex, indices, mesh buffer handles
-        BufferHandle vertexBufferHandle, indicesBufferHandle, meshBufferHandle;
+        // Create Vertex, indices, mesh, BVH buffer handles
+        BufferHandle vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle;
         GL.CreateBuffer(out vertexBufferHandle);
         GL.CreateBuffer(out indicesBufferHandle);
         GL.CreateBuffer(out meshBufferHandle);
+        GL.CreateBuffer(out bvhMetadataHandle);
+        GL.CreateBuffer(out bvhBufferHandle);
         GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, vertexBufferHandle);
         GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, indicesBufferHandle);
         GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, meshBufferHandle);
+        GL.BindBuffer(BufferTargetARB.UniformBuffer, bvhMetadataHandle);
+        GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, bvhBufferHandle);
 
-        _modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle);
+        _modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
         LoadMeshes();
         _modelHolder.UploadModels();
         
