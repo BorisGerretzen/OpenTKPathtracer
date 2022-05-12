@@ -303,43 +303,75 @@ BVHNode GetSibling(BVHNode node, BVHNode near, BVHNode far) {
     return node == near ? far : near;
 }
 
+bool rayIntersectBVHLeaf(Ray ray, BVHNode node, out RayHit closestRayHit) {
+    RayHit loopRayHit;
+    closestRayHit.Distance = RAY_MAX;
+    for(int i = 0; i < node.NumTriangles; i++) {
+        Triangle triangle = triangleSSBO.Triangles[i+node.TriangleOffset];
+        Vertex v1 = verticesSSBO[triangle.index1];
+        Vertex v2 = verticesSSBO[triangle.index2];
+        Vertex v3 = verticesSSBO[triangle.index3];
+        
+        if(rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+            if(loopRayHit.Distance < closestRayHit.Distance) {
+                closestRayHit = loopRayHit;
+            }
+        }
+    }
+    
+    return closestRayHit.Distance < RAY_MAX;
+}
+
 bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
+    // https://www.sci.utah.edu/~wald/Publications/2011/StackFree/sccg2011.pdf
     BVHNode root = bvhSSBO.BVHNodes[mesh.BVHIndex];
     BVHNode current = GetNearestChild(root, ray);
     int state = FROM_PARENT;
-    RayHit unusedInformation;
+    RayHit loopRayHit;
+    rayHit.Distance = RAY_MAX;
     while (current != root && state != FROM_CHILD) {
         BVHNode parent = GetBVH(current.ParentIndex);
         BVHNode nearSibling = GetNearChild(ray, parent);
         BVHNode farSibling = GetFarChild(ray, parent);
 
-        switch (state) {
+        switch (state) { 
             case FROM_CHILD:
-            if (current == nearSibling) {
-                current = farSibling; state = FROM_SIBLING;
-            } else {
-                current = parent; state = FROM_CHILD;
-            }
+                if (current == nearSibling) {
+                    current = farSibling; state = FROM_SIBLING;
+                } else {
+                    current = parent; state = FROM_CHILD;
+                }
             break;
+            
             case FROM_SIBLING:
-            if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), unusedInformation)) {
-                current = parent; state = FROM_CHILD;
-            } else if (current.NumTriangles > 0) {
-                processLeaf(ray, current);
-                current = parent; state = FROM_CHILD;
-            } else {
-                current = near; state = FROM_PARENT;
-            }
+                if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
+                    current = parent; state = FROM_CHILD;
+                } else if (current.NumTriangles > 0) {
+                    if(rayIntersectBVHNode(ray, current, loopRayHit)) {
+                        if(loopRayHit.Distance < rayHit.Distance) {
+                            rayHit = loopRayHit;
+                        }
+                    }
+                    current = parent; state = FROM_CHILD;
+                } else {
+                    current = GetNearChild(ray, current); state = FROM_PARENT;
+                }
             break;
+            
             case FROM_PARENT:
-            if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), unusedInformation)) {
-                current = GetSibling(current, near, far); state = FROM_SIBLING;
-            } else if (current.NumTriangles > 0) {
-                processLeaf(ray, current);
-                current = GetSibling(current, near, far); state = FROM_SIBLING;
-            } else {
-                current = near; state = FROM_PARENT;
-            }
+                if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
+                    current = GetSibling(current, near, far); state = FROM_SIBLING;
+                } else if (current.NumTriangles > 0) {
+                    if(rayIntersectBVHNode(ray, current, loopRayHit)) {
+                        if(loopRayHit.Distance < rayHit.Distance) {
+                            rayHit = loopRayHit;
+                        }
+                    }
+                    current = GetSibling(current, near, far); state = FROM_SIBLING;
+                } else {
+                    current = GetNearChild(ray, current); state = FROM_PARENT;
+                }
+            break;
         }
     }
 
