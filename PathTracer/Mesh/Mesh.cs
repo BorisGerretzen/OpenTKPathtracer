@@ -31,7 +31,7 @@ public class Mesh : Uploadable {
         returnData[0].X = Triangles.Count;
         returnData[0].Y = (float)BVHIndex;
         var materialData = Material.GetGPUData();
-        Array.Copy(materialData, 0, returnData, 3, materialData.Length);
+        Array.Copy(materialData, 0, returnData, 1, materialData.Length);
         return returnData;
     }
 }

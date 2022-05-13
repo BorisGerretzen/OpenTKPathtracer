@@ -22,9 +22,6 @@
         <None Update="shader\shader.vert">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Update="Shader\pathtracer.comp">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </None>
         <None Update="Images\Skybox\POS_X.jpg">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
@@ -83,6 +80,9 @@
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
         <None Update="models\bunny.obj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Shader\pathtracer.comp">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>

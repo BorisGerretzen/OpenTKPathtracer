@@ -1,12 +1,18 @@
-﻿#version 450 core
+﻿#version 450
 #define RAYS_PER_PIXEL 1
 #define RAY_DEPTH 2
 #define RAY_MAX 10000.0
 #define PI 3.1415926535
 #define MAX_TRIANGLES 255
+
 #define FROM_PARENT 0
 #define FROM_SIBLING 1
 #define FROM_CHILD 2
+
+#define SPLIT_X 0
+#define SPLIT_Y 1
+#define SPLIT_Z 2
+
 layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
 layout (binding=0, rgba32f) uniform image2D imgOut;
 layout (binding=1) uniform samplerCube skybox;
@@ -66,13 +72,13 @@ struct Triangle {
 };
 
 struct BVHNode {
+    vec3 AABBMin;
+    vec3 AABBMax;
+    int SplitAxis;
     int NumTriangles;
     int TriangleOffset;
-    vec3 AABBMin;
     int ParentIndex;
-    vec3 AABBMax;
     int Child1;// Child 1 smallest on the split axis
-    vec3 SplitAxis;
     int Child2;
 };
 
@@ -278,21 +284,45 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
 }
 
 BVHNode GetNearChild(Ray ray, BVHNode node) {
-    if (node.SplitAxis.x == 1) {
-        return ray.Direction.x > 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
-    } else if (node.SplitAxis.y == 1) {
-        return ray.Direction.y > 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
+    if (node.SplitAxis == SPLIT_X) {
+        if (ray.Direction.x > 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
+    } else if (node.SplitAxis == SPLIT_Y) {
+        if (ray.Direction.y > 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
     } else {
-        return ray.Direction.z > 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
+        if (ray.Direction.z > 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
     }
 }
 BVHNode GetFarChild(Ray ray, BVHNode node) {
-    if (node.SplitAxis.x == 1) {
-        return ray.Direction.x < 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
-    } else if (node.SplitAxis.y == 1) {
-        return ray.Direction.y < 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
+    if (node.SplitAxis == SPLIT_X) {
+        if (ray.Direction.x < 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
+    } else if (node.SplitAxis == SPLIT_Y) {
+        if (ray.Direction.y < 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
     } else {
-        return ray.Direction.z < 0 ? bvhSSBO.BVHNodes[node.Child1] : bvhSSBO.BVHNodes[node.Child2];
+        if (ray.Direction.z < 0) {
+            return bvhSSBO.BVHNodes[node.Child1];
+        } else {
+            return bvhSSBO.BVHNodes[node.Child2];
+        }
     }
 }
 BVHNode GetBVH(int BVHIndex) {
@@ -307,13 +337,13 @@ bool rayIntersectBVHLeaf(Ray ray, BVHNode node, out RayHit closestRayHit) {
     RayHit loopRayHit;
     closestRayHit.Distance = RAY_MAX;
     for(int i = 0; i < node.NumTriangles; i++) {
-        Triangle triangle = triangleSSBO.Triangles[i+node.TriangleOffset];
-        Vertex v1 = verticesSSBO[triangle.index1];
-        Vertex v2 = verticesSSBO[triangle.index2];
-        Vertex v3 = verticesSSBO[triangle.index3];
-        
-        if(rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
-            if(loopRayHit.Distance < closestRayHit.Distance) {
+        Triangle triangle = trianglesSSBO.Triangles[i+node.TriangleOffset];
+        Vertex v1 = verticesSSBO.Vertices[triangle.index1];
+        Vertex v2 = verticesSSBO.Vertices[triangle.index2];
+        Vertex v3 = verticesSSBO.Vertices[triangle.index3];
+
+        if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+            if (loopRayHit.Distance < closestRayHit.Distance) {
                 closestRayHit = loopRayHit;
             }
         }
@@ -325,7 +355,7 @@ bool rayIntersectBVHLeaf(Ray ray, BVHNode node, out RayHit closestRayHit) {
 bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
     // https://www.sci.utah.edu/~wald/Publications/2011/StackFree/sccg2011.pdf
     BVHNode root = bvhSSBO.BVHNodes[mesh.BVHIndex];
-    BVHNode current = GetNearestChild(root, ray);
+    BVHNode current = GetNearChild(ray, root);
     int state = FROM_PARENT;
     RayHit loopRayHit;
     rayHit.Distance = RAY_MAX;
@@ -342,13 +372,13 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
                     current = parent; state = FROM_CHILD;
                 }
             break;
-            
+
             case FROM_SIBLING:
                 if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
                     current = parent; state = FROM_CHILD;
                 } else if (current.NumTriangles > 0) {
-                    if(rayIntersectBVHNode(ray, current, loopRayHit)) {
-                        if(loopRayHit.Distance < rayHit.Distance) {
+                    if (rayIntersectBVHLeaf(ray, current, loopRayHit)) {
+                        if (loopRayHit.Distance < rayHit.Distance) {
                             rayHit = loopRayHit;
                         }
                     }
@@ -357,17 +387,17 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
                     current = GetNearChild(ray, current); state = FROM_PARENT;
                 }
             break;
-            
+
             case FROM_PARENT:
                 if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
-                    current = GetSibling(current, near, far); state = FROM_SIBLING;
+                    current = GetSibling(current, nearSibling, farSibling); state = FROM_SIBLING;
                 } else if (current.NumTriangles > 0) {
-                    if(rayIntersectBVHNode(ray, current, loopRayHit)) {
-                        if(loopRayHit.Distance < rayHit.Distance) {
+                    if (rayIntersectBVHLeaf(ray, current, loopRayHit)) {
+                        if (loopRayHit.Distance < rayHit.Distance) {
                             rayHit = loopRayHit;
                         }
                     }
-                    current = GetSibling(current, near, far); state = FROM_SIBLING;
+                    current = GetSibling(current, nearSibling, farSibling); state = FROM_SIBLING;
                 } else {
                     current = GetNearChild(ray, current); state = FROM_PARENT;
                 }
@@ -375,7 +405,7 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
         }
     }
 
-    return true;
+    return rayHit.Distance < RAY_MAX;
 }
 
 // Checks if a given ray intersects any gameobject in the scene.
@@ -405,6 +435,11 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
 
     for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
         Mesh mesh = meshSSBO.Meshes[m];
+        if (rayIntersectMesh(ray, mesh, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
     }
 
     return rayHit.Distance < RAY_MAX;
@@ -492,7 +527,6 @@ void main()
         vec2 offset = vec2(GetRandomFloat01(), GetRandomFloat01());
         vec2 normalizedDeviceCoordinates = vec2(pos+offset) / vec2(imageSize(imgOut)) * 2 - 1;
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition, normalizedDeviceCoordinates);
-        //color += ray.Direction;
         vec3 newC = getColor(ray);
         color += newC;
     }

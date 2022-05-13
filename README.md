@@ -1,5 +1,6 @@
 # OpenTK Pathtracer
 This is a path tracing algorithm implemented as an OpenGL compute shader, with OpenTK providing the OpenGL bindings.
+![perfect reflection](https://user-images.githubusercontent.com/15902678/164809199-aa79daee-b6f7-483a-9f56-3dd0e7b421e5.png)
 
 ## Capabilities
 In the compute shader a couple ways to improve the rendering time and quality are implemented.
@@ -27,4 +28,3 @@ To exit the program press ```ESC```.
 - Next event estimation, to substantially reduce the convergence time.
 - Different types of bounding volume hierarchy construction. Currently the bounding volumes are split using the spatial split method. A more optimized way would be to use the surface area heuristic.
 - Splitting the compute shader source code into multiple files. Currently the compute shader resides in one big file, this makes it hard to edit and is not very DRY.
-- 

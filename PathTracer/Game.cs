@@ -132,7 +132,7 @@ public class Game : GameWindow {
         
         // Load compute shader
         _shaderProgram = new ShaderProgram(new List<Shader>
-            { new("Shader/pathtracer.compute", ShaderType.ComputeShader) });
+            { new("Shader/pathtracer.comp", ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
         // Create Vertex, indices, mesh, BVH buffer handles
@@ -177,24 +177,24 @@ public class Game : GameWindow {
         var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 40.0f);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
-        // floor
-        GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
-        // roof
-        GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
-        // right wall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
-        // left wall
-        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
-        // backwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
-        // Frontwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
-        //Light
-        GameObjects.Add(new Cuboid(new Vector3(5f, 9.5f, 6), 1.0f, whiteLight, _numCuboids++));
+        // // floor
+        // GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        // // roof
+        // GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
+        // // right wall
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
+        // // left wall
+        // GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
+        // // backwall
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
+        // GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
+        // // Frontwall
+        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
+        // //Light
+        // GameObjects.Add(new Cuboid(new Vector3(5f, 9.5f, 6), 1.0f, whiteLight, _numCuboids++));
         // The big plane
         //GameObjects.Add(new Cuboid(new Vector3(-100, -1, -100), new Vector3(100,0, 100), whiteDiffuse, _numCuboids++));
 

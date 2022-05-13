@@ -25,8 +25,8 @@ public class Triangle {
 
     public int BufferOffset => throw new NotSupportedException("Do not upload directly.");
 
-    public Vector4[] GetGPUData() {
-        var gpuData = new Vector4[1];
+    public Vector4i[] GetGPUData() {
+        var gpuData = new Vector4i[1];
         gpuData[0].X = index1;
         gpuData[0].Y = index2;
         gpuData[0].Z = index3;

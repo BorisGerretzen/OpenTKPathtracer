@@ -10,7 +10,6 @@ namespace PathTracer;
 public class ModelHolder {
     private readonly List<Mesh> _meshes;
     private readonly List<Vertex> _vertices;
-    private readonly List<Triangle> _triangles;
     private readonly List<BVHNode> _bvhNodes;
 
     private readonly BufferHandle _vertexBufferHandle;
@@ -21,15 +20,16 @@ public class ModelHolder {
     
     private readonly IObjLoader _objLoader;
 
+    private int _triangleCount;
     public ModelHolder(BufferHandle vertexBufferHandle, BufferHandle indicesBufferHandle, BufferHandle meshBufferHandle, BufferHandle bvhMetadataHandle, BufferHandle bvhBufferHandle) {
         _vertexBufferHandle = vertexBufferHandle;
         _indicesBufferHandle = indicesBufferHandle;
         _meshBufferHandle = meshBufferHandle;
         _bvhBufferHandle = bvhBufferHandle;
         _bvhMetadataHandle = bvhMetadataHandle;
+        _triangleCount = 0;
         _meshes = new List<Mesh>();
         _vertices = new List<Vertex>();
-        _triangles = new List<Triangle>();
         _bvhNodes = new List<BVHNode>();
         _objLoader = new ObjLoaderFactory().Create();
     }
@@ -70,7 +70,7 @@ public class ModelHolder {
     public void AddMesh(Mesh mesh) {
         _meshes.Add(mesh);
         _vertices.AddRange(mesh.Vertices);
-        _triangles.AddRange(mesh.Triangles);
+        _triangleCount += mesh.Triangles.Count;
         mesh.BVHIndex = _bvhNodes.Count;
         var builder = new BVHBuilder(mesh.Vertices, mesh.Triangles, BVHType.SpatialSplit);
         _bvhNodes.Add(builder.Build(255));
@@ -79,10 +79,16 @@ public class ModelHolder {
     public void UploadModels() {
         var gpuMeshes = new Vector4[_meshes.Count * (Mesh.SizeInBytes / Vector4.SizeInBytes)];
         var gpuVertices = new Vector4[_vertices.Count * (Vertex.SizeInBytes / Vector4.SizeInBytes)];
-        var gpuTriangles = new Vector4i[_triangles.Count * (Triangle.SizeInBytes / Vector4.SizeInBytes)];
+        var gpuTriangles = new Vector4i[_triangleCount * (Triangle.SizeInBytes / Vector4.SizeInBytes)];
 
         var bvhNodesFlat = new List<BVHNode>();
-        foreach (var node in _bvhNodes) bvhNodesFlat.AddRange(node.Flatten(bvhNodesFlat.Count));
+        var triangles = new List<Triangle>();
+        foreach (var node in _bvhNodes) {
+            var flat = node.Flatten(bvhNodesFlat.Count, triangles.Count);
+            bvhNodesFlat.AddRange(flat.Item1);
+            triangles.AddRange(flat.Item2);
+        }
+
         var gpuNodes = new Vector4[bvhNodesFlat.Count * (BVHNode.SizeInBytes / Vector4.SizeInBytes)];
 
         // Convert meshes into vector4 array
@@ -99,9 +105,9 @@ public class ModelHolder {
             Array.Copy(gpuVertex, 0, gpuVertices, i * (Vertex.SizeInBytes / Vector4.SizeInBytes), gpuVertex.Length);
         }
 
-        // Convert indices into vector4 array
-        for (var i = 0; i < _triangles.Count; i++) {
-            var triangle = _triangles[i];
+        // Convert triangles into vector4 array
+        for (var i = 0; i < triangles.Count; i++) {
+            var triangle = triangles[i];
             var gpuTriangle = triangle.GetGPUData();
             Array.Copy(gpuTriangle, 0, gpuTriangles, i * (Triangle.SizeInBytes / Vector4.SizeInBytes), gpuTriangle.Length);
         }

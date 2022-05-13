@@ -29,7 +29,7 @@ public class BVHBuilder {
             var currentNode = todo.Pop();
 
             // No split needed if triangle count low enough
-            if (currentNode.Triangles.Count <= currentNode.NumTriangles) continue;
+            if (currentNode.Triangles.Count <= currentNode.MaxNumTriangles) continue;
 
             currentNode.Split();
             todo.Push(currentNode.Children[0]);

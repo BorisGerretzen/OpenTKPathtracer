@@ -5,13 +5,13 @@ using PathTracer.Helpers;
 namespace PathTracer.BVH;
 
 public class BVHNodeSpatialSplit : BVHNode {
-    public BVHNodeSpatialSplit(AABB boundingBox, int numTriangles) : base(boundingBox, numTriangles) { }
+    public BVHNodeSpatialSplit(AABB boundingBox, int maxNumTriangles) : base(boundingBox, maxNumTriangles) { }
     public BVHNodeSpatialSplit(AABB boundingBox, BVHNode node1, BVHNode node2, int numTriangles) : base(boundingBox, node1, node2, numTriangles) { }
-
 
     public override void Split() {
         var splitPoint = BoundingBox.Min;
         var longestAxis = BoundingBox.GetLongestAxis();
+        SplitAxis = longestAxis;
         Vector3 min;
 
         var trianglesLeft = new List<Triangle>();
@@ -44,9 +44,9 @@ public class BVHNodeSpatialSplit : BVHNode {
             throw new InvalidEnumArgumentException("Invalid split axis specified");
         }
 
-        var left = new BVHNodeSpatialSplit(new AABB(min, splitPoint), NumTriangles);
+        var left = new BVHNodeSpatialSplit(new AABB(min, splitPoint), MaxNumTriangles);
         left.AddTriangles(trianglesLeft);
-        var right = new BVHNodeSpatialSplit(new AABB(splitPoint, BoundingBox.Max), NumTriangles);
+        var right = new BVHNodeSpatialSplit(new AABB(splitPoint, BoundingBox.Max), MaxNumTriangles);
         right.AddTriangles(trianglesRight);
 
         SetChildren(left, right);
