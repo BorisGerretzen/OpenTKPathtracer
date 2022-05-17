@@ -10,6 +10,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using PathTracer.Helpers;
+using PathTracer.Scene;
 using SixLabors.ImageSharp.Processing;
 using Image = SixLabors.ImageSharp.Image;
 using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
@@ -18,9 +19,8 @@ namespace PathTracer;
 
 public class Game : GameWindow {
     private readonly int _maxCuboids = 64;
-
     private readonly int _maxSpheres = 256;
-
+    private SceneLoader _sceneLoader;
     private readonly Stopwatch _stopwatch = new();
     public readonly List<GameObject> GameObjects = new();
 
@@ -31,19 +31,16 @@ public class Game : GameWindow {
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
     private uint _frameNumber;
-    private BufferHandle _gameObjectsUbo;
     private uint _lastFrameCount;
 
     private KeyboardState _lastKeyboardState;
     private Vector2 _lastPos;
-    private int _numCuboids;
-    private int _numSpheres;
     private ShaderProgram _shaderProgram;
     private TextureHandle _skyboxTexture;
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
     private GLDebugProc callback;
-    private ModelHolder _modelHolder;
+
     public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
         gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
@@ -62,7 +59,7 @@ public class Game : GameWindow {
 
     private void LoadMeshes() {
         //_modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(10, 0, 0));
-        _modelHolder.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
+        _sceneLoader.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
     }
     
     protected override void OnLoad() {
@@ -84,12 +81,13 @@ public class Game : GameWindow {
             BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
             Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes);
-
+        
         // Create GameObjects UBO
-        GL.CreateBuffer(out _gameObjectsUbo);
-        GL.NamedBufferStorage(_gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes,
+        BufferHandle gameObjectsUbo;
+        GL.CreateBuffer(out gameObjectsUbo);
+        GL.NamedBufferStorage(gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes,
             IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, _gameObjectsUbo, IntPtr.Zero,
+        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, gameObjectsUbo, IntPtr.Zero,
             _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
 
         // Create texture to render to
@@ -146,21 +144,19 @@ public class Game : GameWindow {
         GL.BindBuffer(BufferTargetARB.UniformBuffer, bvhMetadataHandle);
         GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, bvhBufferHandle);
 
-        _modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
+        // Load scene
+        var modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
+        _sceneLoader = new SceneLoader(_maxCuboids, _maxSpheres, gameObjectsUbo, modelHolder);
         LoadMeshes();
-        _modelHolder.UploadModels();
-        
-        // Spawn objects
         CreateScene();
-
+        _sceneLoader.Upload();
+        
         // Spawn camera
         _camera = new Camera(new Vector3(5, 2, 2), Size.X / (float)Size.Y);
         CursorGrabbed = true;
     }
 
     private void CreateScene() {
-        _numSpheres = 0;
-        _numCuboids = 0;
         var whiteDiffuse = new Material(new Vector3(0.9f, 0.9f, 0.9f), new Vector3(0));
         var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0.2f, 0.2f, 0.2f), 0.02f, 0.98f, 1.52f);
         var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0, 0, 0), 1f);
@@ -230,7 +226,6 @@ public class Game : GameWindow {
         //     );
         //     GameObjects.Add(new Sphere(new Vector3(0.5f,4f,0.5f+1.5f*i), 0.5f, material, _numSpheres++));
         // }
-        foreach (var gameObject in GameObjects) gameObject.Upload(_gameObjectsUbo);
         _stopwatch.Start();
     }
 
@@ -257,7 +252,7 @@ public class Game : GameWindow {
         base.OnRenderFrame(args);
 
         _shaderProgram.SetUniformUInt(0, _frameNumber++);
-        _shaderProgram.SetUniformVec2(1, new Vector2i(_numSpheres, _numCuboids));
+        _shaderProgram.SetUniformVec2(1, _sceneLoader.GetBasicData());
 
         // GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);

@@ -6,6 +6,7 @@ namespace PathTracer.Helpers;
 
 public class RawBytesEncoder : IImageEncoder {
     public void Encode<TPixel>(Image<TPixel> image, Stream stream) where TPixel : unmanaged, IPixel<TPixel> {
+        stream.SetLength(image.Height * image.Width * 3);
         for (var y = 0; y < image.Height; y++)
         for (var x = 0; x < image.Width; x++) {
             var target = new Rgba32();
