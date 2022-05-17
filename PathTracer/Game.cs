@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Xml.Serialization;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
@@ -22,11 +23,9 @@ public class Game : GameWindow {
     private readonly int _maxSpheres = 256;
     private SceneLoader _sceneLoader;
     private readonly Stopwatch _stopwatch = new();
-    public readonly List<GameObject> GameObjects = new();
 
     private BufferHandle _basicDataUbo;
     private Camera _camera;
-
     private bool _cameraLocked;
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
@@ -57,17 +56,6 @@ public class Game : GameWindow {
         Console.WriteLine(errorString);
     }
 
-    private void LoadMeshes() {
-        //_modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(10, 0, 0));
-        // _sceneLoader.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
-        // _sceneLoader.AddCuboid(new Vector3(10,10,10), new Vector3(20,20,20), Material.FullSpecular);
-        // _sceneLoader.AddSphere(new Vector3(-10,-10,-10), 5.0f, Material.WhiteLight);
-        // var serializer = new XmlSerializer(typeof(Scene.Scene));
-        // var writer = new StreamWriter("scene.xml", false);
-        // serializer.Serialize(writer, _sceneLoader._scene);
-        _sceneLoader.LoadScene("scene.xml");
-    }
-    
     protected override void OnLoad() {
         GL.Enable(EnableCap.TextureCubeMapSeamless);
 
@@ -153,7 +141,6 @@ public class Game : GameWindow {
         // Load scene
         var modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
         _sceneLoader = new SceneLoader(_maxCuboids, _maxSpheres, gameObjectsUbo, modelHolder);
-        LoadMeshes();
         CreateScene();
         _sceneLoader.Upload();
         
@@ -232,6 +219,9 @@ public class Game : GameWindow {
         //     );
         //     GameObjects.Add(new Sphere(new Vector3(0.5f,4f,0.5f+1.5f*i), 0.5f, material, _numSpheres++));
         // }
+        var serializer = new XmlSerializer(typeof(Scene.Scene));
+        var writer = new StreamWriter("scene.xml", false);
+        serializer.Serialize(writer, _sceneLoader.Scene);
         _stopwatch.Start();
     }
 
@@ -242,6 +232,7 @@ public class Game : GameWindow {
         _windowSize.Y = e.Height;
         GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4,
             _camera.GetProjectionMatrix().Inverted());
+        GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
             PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
         _frameNumber = 0;
