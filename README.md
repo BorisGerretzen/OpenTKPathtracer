@@ -10,14 +10,13 @@ In the compute shader a couple ways to improve the rendering time and quality ar
 - The program supports progressive rendering by averaging the pixels from previous frames together.
 - A skybox is included to provide global illumination and some nice scenery
 - Bounding volume hierarchies are used as acceleration structures to decrease the amount of ray triangle intersections that have to be done for every ray.
-  - The implemented BVH traversal algorithm is found in [Efficient Stack-less BVH Traversal for Ray Tracing](https://www.sci.utah.edu/~wald/Publications/2011/StackFree/sccg2011.pdf) by Hapala et al.
 
 Currently, the following material options are supported:
 - Fully diffuse materials
 - Fully specular materials
 - Dielectric materials
 - Glossy materials (mix of specular and diffuse)
-- 
+
 ## How to use
 You can move around in the scene using the ```WASD``` buttons, the ```spacebar``` and ```left shift``` are used to go up and down respectively.\
 To lock the camera in place and let the render progress even if you touch the keyboard or mouse accidentally, you can press the ```L``` button.\
