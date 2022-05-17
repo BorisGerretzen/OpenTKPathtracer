@@ -33,8 +33,7 @@ public class Mesh : Uploadable {
         if (BVHIndex == null) throw new Exception("BVH index is null, do not use this class directly.");
 
         var returnData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
-        returnData[0].X = Triangles.Count;
-        returnData[0].Y = (float)BVHIndex;
+        returnData[0].X = (float)BVHIndex;
         var materialData = Material.GetGPUData();
         Array.Copy(materialData, 0, returnData, 1, materialData.Length);
         return returnData;

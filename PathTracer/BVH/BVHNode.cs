@@ -3,7 +3,7 @@ using PathTracer.Helpers;
 
 namespace PathTracer.BVH;
 
-public abstract class BVHNode : Uploadable {
+public abstract class BVHNode {
     public static int SizeInBytes = Vector4.SizeInBytes * 1 + AABB.SizeInBytes;
 
     #region uploaded
@@ -94,9 +94,9 @@ public abstract class BVHNode : Uploadable {
         return (nodes, triangles);
     }
 
-    public override int BufferOffset => throw new NotSupportedException("Do not upload directly.");
+    public int BufferOffset => throw new NotSupportedException("Do not upload directly.");
 
-    public override Vector4[] GetGPUData() {
+    public Vector4[] GetGPUData() {
         if (Triangles.Count > MaxNumTriangles) throw new Exception("Node has too many triangles");
         if (!TriangleOffset.HasValue) throw new NullReferenceException("Some values are null, flatten the tree before uploading.");
         var gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];

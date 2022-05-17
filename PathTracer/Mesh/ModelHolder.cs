@@ -9,6 +9,7 @@ namespace PathTracer;
 
 public class ModelHolder {
     private readonly List<Mesh> _meshes;
+    private readonly List<Triangle> _triangles;
     private readonly List<Vertex> _vertices;
     private readonly List<BVHNode> _bvhNodes;
 
@@ -17,11 +18,9 @@ public class ModelHolder {
     private readonly BufferHandle _meshBufferHandle;
     private readonly BufferHandle _bvhMetadataHandle;
     private readonly BufferHandle _bvhBufferHandle;
+
+    private readonly ObjLoaderFactory _objLoaderFactory;
     
-    private readonly IObjLoader _objLoader;
-
-    private int _triangleCount;
-
     /// <summary>
     ///     Creates a new model holder
     ///     This object holds all models in the scene and transfers them into buffers on the gpu
@@ -37,11 +36,11 @@ public class ModelHolder {
         _meshBufferHandle = meshBufferHandle;
         _bvhBufferHandle = bvhBufferHandle;
         _bvhMetadataHandle = bvhMetadataHandle;
-        _triangleCount = 0;
         _meshes = new List<Mesh>();
         _vertices = new List<Vertex>();
         _bvhNodes = new List<BVHNode>();
-        _objLoader = new ObjLoaderFactory().Create();
+        _triangles = new List<Triangle>();
+        _objLoaderFactory = new ObjLoaderFactory();
     }
 
     /// <summary>
@@ -51,8 +50,12 @@ public class ModelHolder {
     /// <param name="material">Material of the mesh</param>
     /// <param name="position">Position in the world</param>
     public void AddModel(string path, Material material, Vector3 position) {
-        var fileStream = File.Open(path, FileMode.Open);
-        var result = _objLoader.Load(fileStream);
+        LoadResult result;
+        using (var fileStream = File.Open(path, FileMode.Open)) {
+            result = _objLoaderFactory.Create().Load(fileStream);
+        }
+
+        var indicesOffset = _vertices.Count;
         var vertices = new List<Vertex>();
         var triangles = new List<Triangle>();
 
@@ -73,7 +76,7 @@ public class ModelHolder {
             var idx1 = face[0].VertexIndex - 1;
             var idx2 = face[1].VertexIndex - 1;
             var idx3 = face[2].VertexIndex - 1;
-            var t = new Triangle(idx1, idx2, idx3, vertices[idx1], vertices[idx2], vertices[idx3]);
+            var t = new Triangle(idx1 + indicesOffset, idx2 + indicesOffset, idx3 + indicesOffset, vertices[idx1], vertices[idx2], vertices[idx3]);
             triangles.Add(t);
         }
 
@@ -88,31 +91,40 @@ public class ModelHolder {
         // Add to lists
         _meshes.Add(mesh);
         _vertices.AddRange(mesh.Vertices);
-        _triangleCount += mesh.Triangles.Count;
 
         // Build BVH
         mesh.BVHIndex = _bvhNodes.Count;
         var builder = new BVHBuilder(mesh.Vertices, mesh.Triangles, BVHType.SpatialSplit);
-        _bvhNodes.Add(builder.Build(255));
+        var bvhRoot = builder.Build(255);
+        var flat = bvhRoot.Flatten(_bvhNodes.Count, _triangles.Count);
+        _bvhNodes.AddRange(flat.Item1);
+        _triangles.AddRange(flat.Item2);
     }
 
+    private static int SumTriangles(BVHNode node) {
+        var work = new Stack<BVHNode>();
+        work.Push(node);
+        var triangleCount = 0;
+        while (work.Count > 0) {
+            var workNode = work.Pop();
+            triangleCount += workNode.Triangles.Count;
+            if (workNode.Children[0] != null) {
+                work.Push(workNode.Children[0]);
+                work.Push(workNode.Children[1]);
+            }
+        }
+
+        return triangleCount;
+    }
+    
     /// <summary>
     ///     Uploads all models stored to the buffers specified in the constructor.
     /// </summary>
     public void UploadModels() {
         var gpuMeshes = new Vector4[_meshes.Count * (Mesh.SizeInBytes / Vector4.SizeInBytes)];
         var gpuVertices = new Vector4[_vertices.Count * (Vertex.SizeInBytes / Vector4.SizeInBytes)];
-        var gpuTriangles = new Vector4i[_triangleCount * (Triangle.SizeInBytes / Vector4.SizeInBytes)];
-
-        var bvhNodesFlat = new List<BVHNode>();
-        var triangles = new List<Triangle>();
-        foreach (var node in _bvhNodes) {
-            var flat = node.Flatten(bvhNodesFlat.Count, triangles.Count);
-            bvhNodesFlat.AddRange(flat.Item1);
-            triangles.AddRange(flat.Item2);
-        }
-
-        var gpuNodes = new Vector4[bvhNodesFlat.Count * (BVHNode.SizeInBytes / Vector4.SizeInBytes)];
+        var gpuTriangles = new Vector4i[_triangles.Count * (Triangle.SizeInBytes / Vector4.SizeInBytes)];
+        var gpuNodes = new Vector4[_bvhNodes.Count * (BVHNode.SizeInBytes / Vector4.SizeInBytes)];
 
         // Convert meshes into vector4 array
         for (var i = 0; i < _meshes.Count; i++) {
@@ -129,15 +141,15 @@ public class ModelHolder {
         }
 
         // Convert triangles into vector4 array
-        for (var i = 0; i < triangles.Count; i++) {
-            var triangle = triangles[i];
+        for (var i = 0; i < _triangles.Count; i++) {
+            var triangle = _triangles[i];
             var gpuTriangle = triangle.GetGPUData();
             Array.Copy(gpuTriangle, 0, gpuTriangles, i * (Triangle.SizeInBytes / Vector4.SizeInBytes), gpuTriangle.Length);
         }
 
         // Convert BVHs into vector4 array
-        for (var i = 0; i < bvhNodesFlat.Count; i++) {
-            var node = bvhNodesFlat[i];
+        for (var i = 0; i < _bvhNodes.Count; i++) {
+            var node = _bvhNodes[i];
             var gpuNode = node.GetGPUData();
             Array.Copy(gpuNode, 0, gpuNodes, i * (BVHNode.SizeInBytes / Vector4.SizeInBytes), gpuNode.Length);
         }
@@ -162,7 +174,7 @@ public class ModelHolder {
 
         GL.NamedBufferStorage(_bvhMetadataHandle, Vector4.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 5, _bvhMetadataHandle, IntPtr.Zero, Vector4.SizeInBytes);
-        GL.NamedBufferSubData(_bvhMetadataHandle, IntPtr.Zero, Vector4.SizeInBytes, new Vector4(bvhNodesFlat.Count, 0, 0, 0));
+        GL.NamedBufferSubData(_bvhMetadataHandle, IntPtr.Zero, Vector4.SizeInBytes, new Vector4(_bvhNodes.Count, 0, 0, 0));
 
         GL.NamedBufferStorage(_bvhBufferHandle, bvhBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 6, _bvhBufferHandle, IntPtr.Zero, bvhBufferSize);

@@ -358,7 +358,7 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
     rayHit.Distance = RAY_MAX;
     int stack[32];
     int stackPointer = 0;
-    stack[0] = 0;
+    stack[0] = int(mesh.BVHIndex);
 
     while (stackPointer >= 0) {
         BVHNode node = GetBVH(stack[stackPointer]);
@@ -413,7 +413,7 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
     }
 
     for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
-        Mesh mesh = meshSSBO.Meshes[0];
+        Mesh mesh = meshSSBO.Meshes[m];
         if (rayIntersectMesh(ray, mesh, loopRayHit)) {
             if (loopRayHit.Distance < rayHit.Distance) {
                 rayHit = loopRayHit;
