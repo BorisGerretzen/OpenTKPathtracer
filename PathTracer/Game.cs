@@ -61,8 +61,8 @@ public class Game : GameWindow {
     }
 
     private void LoadMeshes() {
-        _modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(10, 0, 0));
-        _modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(0, 0, 0));
+        //_modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(10, 0, 0));
+        _modelHolder.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
     }
     
     protected override void OnLoad() {

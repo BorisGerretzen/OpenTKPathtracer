@@ -49,7 +49,8 @@ public class ModelHolder {
     /// <param name="path">Path to the file</param>
     /// <param name="material">Material of the mesh</param>
     /// <param name="position">Position in the world</param>
-    public void AddModel(string path, Material material, Vector3 position) {
+    /// <param name="scale">Scale of the model</param>
+    public void AddModel(string path, Material material, Vector3 position, Vector3 scale) {
         LoadResult result;
         using (var fileStream = File.Open(path, FileMode.Open)) {
             result = _objLoaderFactory.Create().Load(fileStream);
@@ -63,9 +64,9 @@ public class ModelHolder {
         foreach (var vertex in result.Vertices) {
             vertices.Add(new Vertex(
                 new Vector3(
-                    vertex.X + position.X,
-                    vertex.Y + position.Y,
-                    vertex.Z + position.Z),
+                    vertex.X * scale.X + position.X,
+                    vertex.Y * scale.Y + position.Y,
+                    vertex.Z * scale.Y + position.Z),
                 Vector3.One,
                 Vector2.One));
         }
