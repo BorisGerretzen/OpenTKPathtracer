@@ -101,22 +101,6 @@ public class ModelHolder {
         _triangles.AddRange(flat.Item2);
     }
 
-    private static int SumTriangles(BVHNode node) {
-        var work = new Stack<BVHNode>();
-        work.Push(node);
-        var triangleCount = 0;
-        while (work.Count > 0) {
-            var workNode = work.Pop();
-            triangleCount += workNode.Triangles.Count;
-            if (workNode.Children[0] != null) {
-                work.Push(workNode.Children[0]);
-                work.Push(workNode.Children[1]);
-            }
-        }
-
-        return triangleCount;
-    }
-    
     /// <summary>
     ///     Uploads all models stored to the buffers specified in the constructor.
     /// </summary>
