@@ -59,7 +59,13 @@ public class Game : GameWindow {
 
     private void LoadMeshes() {
         //_modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(10, 0, 0));
-        _sceneLoader.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
+        // _sceneLoader.AddModel("models/bunny.obj", Material.WhiteDiffuse, Vector3.Zero, Vector3.One * 30);
+        // _sceneLoader.AddCuboid(new Vector3(10,10,10), new Vector3(20,20,20), Material.FullSpecular);
+        // _sceneLoader.AddSphere(new Vector3(-10,-10,-10), 5.0f, Material.WhiteLight);
+        // var serializer = new XmlSerializer(typeof(Scene.Scene));
+        // var writer = new StreamWriter("scene.xml", false);
+        // serializer.Serialize(writer, _sceneLoader._scene);
+        _sceneLoader.LoadScene("scene.xml");
     }
     
     protected override void OnLoad() {

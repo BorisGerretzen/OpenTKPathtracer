@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Xml.Serialization;
 using OpenTK.Graphics;
 using OpenTK.Mathematics;
 using PathTracer.Helpers;
@@ -6,15 +7,10 @@ using PathTracer.Helpers;
 namespace PathTracer.Scene;
 
 public class SceneLoader {
-    private readonly List<GameObject> _gameObjects;
-    private readonly int _maxCuboids;
-    private readonly int _maxSpheres;
+    public Scene _scene;
     private readonly BufferHandle _gameObjectsUbo;
     private readonly ModelHolder _modelHolder;
-
-    private int _numCuboids;
-    private int _numSpheres;
-
+    
     /// <summary>
     ///     Creates a new scene loader, this is responsible for loading all primitives and models to a scene.
     /// </summary>
@@ -23,13 +19,15 @@ public class SceneLoader {
     /// <param name="gameObjectsUbo">BufferHandle of the game object buffer</param>
     /// <param name="modelHolder">The ModelHolder in use</param>
     public SceneLoader(int maxCuboids, int maxSpheres, BufferHandle gameObjectsUbo, ModelHolder modelHolder) {
-        _gameObjects = new List<GameObject>(maxCuboids + maxSpheres);
-        _maxCuboids = maxCuboids;
-        _maxSpheres = maxSpheres;
+        _scene = new Scene();
+        _scene.Cuboids = new List<Cuboid>(maxCuboids);
+        _scene.Spheres = new List<Sphere>(maxSpheres);
+        _scene.Meshes = new List<SerializableMesh>();
         _gameObjectsUbo = gameObjectsUbo;
         _modelHolder = modelHolder;
     }
 
+    private SceneLoader() { }
     /// <summary>
     ///     Add a cuboid to the scene.
     /// </summary>
@@ -38,8 +36,8 @@ public class SceneLoader {
     /// <param name="material">Material of the cuboid</param>
     /// <exception cref="ConstraintException">If max number of cuboids is exceeded</exception>
     public void AddCuboid(Vector3 min, Vector3 max, Material material) {
-        if (_numCuboids + 1 > _maxCuboids) throw new ConstraintException($"Max number of cuboids '{_maxCuboids}' has been exceeded.");
-        _gameObjects.Add(new Cuboid(min, max, material, _numCuboids++));
+        if (_scene.Cuboids.Count + 1 > _scene.Cuboids.Capacity) throw new ConstraintException($"Max number of cuboids '{_scene.Cuboids.Capacity}' has been exceeded.");
+        _scene.Cuboids.Add(new Cuboid(min, max, material, _scene.Cuboids.Count));
     }
 
     /// <summary>
@@ -50,8 +48,8 @@ public class SceneLoader {
     /// <param name="material">Material of the sphere</param>
     /// <exception cref="ConstraintException">If max number of spheres is exceeded</exception>
     public void AddSphere(Vector3 center, float radius, Material material) {
-        if (_numCuboids + 1 > _numSpheres) throw new ConstraintException($"Max number of spheres '{_maxSpheres}' has been exceeded.");
-        _gameObjects.Add(new Sphere(center, radius, material, _numSpheres++));
+        if (_scene.Spheres.Count + 1 > _scene.Spheres.Capacity) throw new ConstraintException($"Max number of spheres '{_scene.Spheres.Capacity}' has been exceeded.");
+        _scene.Spheres.Add(new Sphere(center, radius, material, _scene.Spheres.Count));
     }
 
     /// <summary>
@@ -62,14 +60,16 @@ public class SceneLoader {
     /// <param name="position">Position of the model</param>
     /// <param name="scale">Size of the model</param>
     public void AddModel(string path, Material material, Vector3 position, Vector3 scale) {
-        _modelHolder.AddModel(path, material, position, scale);
+        _scene.Meshes.Add(new SerializableMesh(path, material, position, scale));
     }
 
     /// <summary>
     ///     Uploads the GameObjects to the gpu.
     /// </summary>
     public void Upload() {
-        _gameObjects.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
+        _scene.Cuboids.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
+        _scene.Spheres.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
+        _scene.Meshes.ForEach(mesh => _modelHolder.AddModel(mesh.Path, mesh.Material, mesh.Position, mesh.Scale));
         _modelHolder.UploadModels();
     }
 
@@ -78,6 +78,13 @@ public class SceneLoader {
     /// </summary>
     /// <returns></returns>
     public Vector2i GetBasicData() {
-        return new Vector2i(_numSpheres, _numCuboids);
+        return new Vector2i(_scene.Spheres.Count, _scene.Cuboids.Count);
+    }
+
+    public void LoadScene(string path) {
+        var xml = File.ReadAllText(path);
+        var serializer = new XmlSerializer(typeof(Scene));
+        var reader = new StreamReader(path);
+        _scene = (Scene)serializer.Deserialize(reader);
     }
 }

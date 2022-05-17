@@ -4,6 +4,7 @@ using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using PathTracer.BVH;
 using PathTracer.Helpers;
+using PathTracer.Scene;
 
 namespace PathTracer;
 
@@ -84,6 +85,10 @@ public class ModelHolder {
         AddMesh(new Mesh(vertices, triangles, material));
     }
 
+    public void AddModel(SerializableMesh serializableMesh) {
+        AddModel(serializableMesh.Path, serializableMesh.Material, serializableMesh.Position, serializableMesh.Scale);
+    }
+    
     /// <summary>
     ///     Adds a Mesh to the MeshHolder.
     /// </summary>

@@ -1,26 +1,25 @@
-﻿using OpenTK.Mathematics;
+﻿using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
+using OpenTK.Mathematics;
 
 namespace PathTracer.Helpers;
 
+[DataContract]
 public class Material : Uploadable {
     #region default materials
-
     public static Material WhiteDiffuse = new(Vector3.One, Vector3.Zero);
     public static Material WhiteLight = new(Vector3.One, Vector3.One);
     public static Material FullSpecular = new(Vector3.One, Vector3.Zero, 1.0f);
-
     #endregion
     
-    
     public static int SizeInBytes = Vector4.SizeInBytes * 3;
-
     private Vector4[] _gpuData;
-    public Vector3 Albedo;
-    public Vector3 Emission;
 
-    public float IndexOfRefraction;
-    public float Refractive;
-    public float Specularity;
+    [DataMember] public Vector3 Albedo;
+    [DataMember] public Vector3 Emission;
+    [DataMember] public float IndexOfRefraction;
+    [DataMember] public float Refractive;
+    [DataMember] public float Specularity;
 
     public Material(Vector3 albedo, Vector3 emission, float specularity = 0.0f, float refractive = 0.0f, float indexOfRefraction = 0.0f) {
         Albedo = albedo;
@@ -30,7 +29,8 @@ public class Material : Uploadable {
         IndexOfRefraction = indexOfRefraction;
     }
 
-    public override int BufferOffset => throw new NotSupportedException("Do not upload directly");
+    private Material() { }
+    [JsonIgnore] public override int BufferOffset => throw new NotSupportedException("Do not upload directly");
 
     public override Vector4[] GetGPUData() {
         _gpuData = new Vector4[SizeInBytes / Vector4.SizeInBytes];
