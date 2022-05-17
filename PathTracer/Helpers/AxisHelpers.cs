@@ -2,13 +2,6 @@
 
 namespace PathTracer.Helpers;
 
-public enum Axis {
-    X,
-    Y,
-    Z,
-    None
-}
-
 public static class AxisHelpers {
     public static int AxisToInt(Axis axis) {
         if (axis == Axis.X) return 0;

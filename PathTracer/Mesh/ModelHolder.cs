@@ -13,7 +13,7 @@ public class ModelHolder {
     private readonly List<BVHNode> _bvhNodes;
 
     private readonly BufferHandle _vertexBufferHandle;
-    private readonly BufferHandle _indicesBufferHandle;
+    private readonly BufferHandle _trianglesBufferHandle;
     private readonly BufferHandle _meshBufferHandle;
     private readonly BufferHandle _bvhMetadataHandle;
     private readonly BufferHandle _bvhBufferHandle;
@@ -21,9 +21,19 @@ public class ModelHolder {
     private readonly IObjLoader _objLoader;
 
     private int _triangleCount;
-    public ModelHolder(BufferHandle vertexBufferHandle, BufferHandle indicesBufferHandle, BufferHandle meshBufferHandle, BufferHandle bvhMetadataHandle, BufferHandle bvhBufferHandle) {
+
+    /// <summary>
+    ///     Creates a new model holder
+    ///     This object holds all models in the scene and transfers them into buffers on the gpu
+    /// </summary>
+    /// <param name="vertexBufferHandle">Vertex buffer handle</param>
+    /// <param name="trianglesBufferHandle">Triangles buffer handle</param>
+    /// <param name="meshBufferHandle">Mesh buffer handle</param>
+    /// <param name="bvhMetadataHandle">BVH Metadata buffer handle</param>
+    /// <param name="bvhBufferHandle">BVH buffer handle</param>
+    public ModelHolder(BufferHandle vertexBufferHandle, BufferHandle trianglesBufferHandle, BufferHandle meshBufferHandle, BufferHandle bvhMetadataHandle, BufferHandle bvhBufferHandle) {
         _vertexBufferHandle = vertexBufferHandle;
-        _indicesBufferHandle = indicesBufferHandle;
+        _trianglesBufferHandle = trianglesBufferHandle;
         _meshBufferHandle = meshBufferHandle;
         _bvhBufferHandle = bvhBufferHandle;
         _bvhMetadataHandle = bvhMetadataHandle;
@@ -34,27 +44,30 @@ public class ModelHolder {
         _objLoader = new ObjLoaderFactory().Create();
     }
 
-
+    /// <summary>
+    ///     Loads the vertices and triangles from a Waveform .obj file.
+    /// </summary>
+    /// <param name="path">Path to the file</param>
+    /// <param name="material">Material of the mesh</param>
+    /// <param name="position">Position in the world</param>
     public void AddModel(string path, Material material, Vector3 position) {
-        var fileStream = File.Open("models/teapot.obj", FileMode.Open);
+        var fileStream = File.Open(path, FileMode.Open);
         var result = _objLoader.Load(fileStream);
         var vertices = new List<Vertex>();
         var triangles = new List<Triangle>();
-        var minVertex = Vector3.PositiveInfinity;
-        var maxVertex = Vector3.NegativeInfinity;
+
+        // Add vertices and apply object position
         foreach (var vertex in result.Vertices) {
-            var vx = vertex.X + position.X;
-            var vy = vertex.Y + position.Y;
-            var vz = vertex.Z + position.Z;
-            if (vx < minVertex.X) minVertex.X = vx;
-            if (vy < minVertex.Y) minVertex.Y = vy;
-            if (vz < minVertex.Z) minVertex.Z = vz;
-            if (vx > maxVertex.X) maxVertex.X = vx;
-            if (vy > maxVertex.Y) maxVertex.Y = vy;
-            if (vz > maxVertex.Z) maxVertex.Z = vz;
-            vertices.Add(new Vertex(new Vector3(vx, vy, vz), Vector3.One, Vector2.One));
+            vertices.Add(new Vertex(
+                new Vector3(
+                    vertex.X + position.X,
+                    vertex.Y + position.Y,
+                    vertex.Z + position.Z),
+                Vector3.One,
+                Vector2.One));
         }
 
+        // Add triangles
         foreach (var group in result.Groups)
         foreach (var face in group.Faces) {
             var idx1 = face[0].VertexIndex - 1;
@@ -64,18 +77,28 @@ public class ModelHolder {
             triangles.Add(t);
         }
 
-        AddMesh(new Mesh(vertices, triangles, material, minVertex, maxVertex));
+        AddMesh(new Mesh(vertices, triangles, material));
     }
 
-    public void AddMesh(Mesh mesh) {
+    /// <summary>
+    ///     Adds a Mesh to the MeshHolder.
+    /// </summary>
+    /// <param name="mesh">The mesh to be added</param>
+    private void AddMesh(Mesh mesh) {
+        // Add to lists
         _meshes.Add(mesh);
         _vertices.AddRange(mesh.Vertices);
         _triangleCount += mesh.Triangles.Count;
+
+        // Build BVH
         mesh.BVHIndex = _bvhNodes.Count;
         var builder = new BVHBuilder(mesh.Vertices, mesh.Triangles, BVHType.SpatialSplit);
         _bvhNodes.Add(builder.Build(255));
     }
 
+    /// <summary>
+    ///     Uploads all models stored to the buffers specified in the constructor.
+    /// </summary>
     public void UploadModels() {
         var gpuMeshes = new Vector4[_meshes.Count * (Mesh.SizeInBytes / Vector4.SizeInBytes)];
         var gpuVertices = new Vector4[_vertices.Count * (Vertex.SizeInBytes / Vector4.SizeInBytes)];
@@ -133,9 +156,9 @@ public class ModelHolder {
         GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 3, _vertexBufferHandle, IntPtr.Zero, vertexBufferSize);
         GL.NamedBufferSubData(_vertexBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuVertices.Length, gpuVertices);
 
-        GL.NamedBufferStorage(_indicesBufferHandle, trianglesBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 4, _indicesBufferHandle, IntPtr.Zero, trianglesBufferSize);
-        GL.NamedBufferSubData(_indicesBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuTriangles.Length, gpuTriangles);
+        GL.NamedBufferStorage(_trianglesBufferHandle, trianglesBufferSize, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, 4, _trianglesBufferHandle, IntPtr.Zero, trianglesBufferSize);
+        GL.NamedBufferSubData(_trianglesBufferHandle, IntPtr.Zero, Vector4.SizeInBytes * gpuTriangles.Length, gpuTriangles);
 
         GL.NamedBufferStorage(_bvhMetadataHandle, Vector4.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 5, _bvhMetadataHandle, IntPtr.Zero, Vector4.SizeInBytes);

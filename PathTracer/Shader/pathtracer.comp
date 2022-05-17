@@ -1,4 +1,4 @@
-﻿#version 450
+﻿#version 460
 #define RAYS_PER_PIXEL 1
 #define RAY_DEPTH 2
 #define RAY_MAX 10000.0
@@ -73,17 +73,17 @@ struct Triangle {
 
 struct BVHNode {
     vec3 AABBMin;
+    float Child1;// Child 1 smallest on the split axis
     vec3 AABBMax;
-    int SplitAxis;
-    int NumTriangles;
-    int TriangleOffset;
-    int ParentIndex;
-    int Child1;// Child 1 smallest on the split axis
-    int Child2;
+    float Child2;
+    float SplitAxis;
+    float NumTriangles;
+    float TriangleOffset;
+    float ParentIndex;
 };
 
 struct Mesh {
-    int BVHIndex;
+    float BVHIndex;
     Material Material;
 //sampler2D DiffuseMap;
 //sampler2D SpecularityMap;
@@ -120,7 +120,7 @@ layout(std430, binding=4) buffer TrianglesSSBO {
 layout(std140, binding = 5) uniform BVHMetadata {
     int NumBVs;
 } bvhMetaData;
-layout(std430, binding=6) buffer BVHSSBO {
+layout(std140, binding=6) buffer BVHSSBO {
     BVHNode BVHNodes[];
 } bvhSSBO;
 // ---------- End inputs ---------- //
@@ -233,7 +233,7 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
     return true;
 }
 
-bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, out RayHit rayHit) {
+bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, Material material, out RayHit rayHit) {
     vec3 v1v2 = v2.Position - v1.Position;
     vec3 v1v3 = v3.Position - v1.Position;
     vec3 normal = cross(v1v2, v1v3);
@@ -264,6 +264,7 @@ bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, out RayHit r
     rayHit.Position = planeIntersection;
     rayHit.FromInside = false;
     rayHit.Normal = normalize(normal);
+    rayHit.Material = material;
     return true;
 }
 
@@ -284,44 +285,44 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
 }
 
 BVHNode GetNearChild(Ray ray, BVHNode node) {
-    if (node.SplitAxis == SPLIT_X) {
+    if (int(node.SplitAxis) == SPLIT_X) {
         if (ray.Direction.x > 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
-    } else if (node.SplitAxis == SPLIT_Y) {
+    } else if (int(node.SplitAxis) == SPLIT_Y) {
         if (ray.Direction.y > 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
     } else {
         if (ray.Direction.z > 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
     }
 }
 BVHNode GetFarChild(Ray ray, BVHNode node) {
     if (node.SplitAxis == SPLIT_X) {
         if (ray.Direction.x < 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
     } else if (node.SplitAxis == SPLIT_Y) {
         if (ray.Direction.y < 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
     } else {
         if (ray.Direction.z < 0) {
-            return bvhSSBO.BVHNodes[node.Child1];
+            return bvhSSBO.BVHNodes[int(node.Child1)];
         } else {
-            return bvhSSBO.BVHNodes[node.Child2];
+            return bvhSSBO.BVHNodes[int(node.Child2)];
         }
     }
 }
@@ -333,16 +334,16 @@ BVHNode GetSibling(BVHNode node, BVHNode near, BVHNode far) {
     return node == near ? far : near;
 }
 
-bool rayIntersectBVHLeaf(Ray ray, BVHNode node, out RayHit closestRayHit) {
+bool rayIntersectBVHLeaf(Ray ray, BVHNode node, Material material, out RayHit closestRayHit) {
     RayHit loopRayHit;
     closestRayHit.Distance = RAY_MAX;
-    for(int i = 0; i < node.NumTriangles; i++) {
-        Triangle triangle = trianglesSSBO.Triangles[i+node.TriangleOffset];
+    for (int i = 0; i < int(node.NumTriangles); i++) {
+        Triangle triangle = trianglesSSBO.Triangles[i+int(node.TriangleOffset)];
         Vertex v1 = verticesSSBO.Vertices[triangle.index1];
         Vertex v2 = verticesSSBO.Vertices[triangle.index2];
         Vertex v3 = verticesSSBO.Vertices[triangle.index3];
 
-        if (rayIntersectTriangle(ray, v1, v2, v3, loopRayHit)) {
+        if (rayIntersectTriangle(ray, v1, v2, v3, material, loopRayHit)) {
             if (loopRayHit.Distance < closestRayHit.Distance) {
                 closestRayHit = loopRayHit;
             }
@@ -353,55 +354,33 @@ bool rayIntersectBVHLeaf(Ray ray, BVHNode node, out RayHit closestRayHit) {
 }
 
 bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
-    // https://www.sci.utah.edu/~wald/Publications/2011/StackFree/sccg2011.pdf
-    BVHNode root = bvhSSBO.BVHNodes[mesh.BVHIndex];
-    BVHNode current = GetNearChild(ray, root);
-    int state = FROM_PARENT;
     RayHit loopRayHit;
     rayHit.Distance = RAY_MAX;
-    while (current != root && state != FROM_CHILD) {
-        BVHNode parent = GetBVH(current.ParentIndex);
-        BVHNode nearSibling = GetNearChild(ray, parent);
-        BVHNode farSibling = GetFarChild(ray, parent);
+    int stack[32];
+    int stackPointer = 0;
+    stack[0] = 0;
 
-        switch (state) { 
-            case FROM_CHILD:
-                if (current == nearSibling) {
-                    current = farSibling; state = FROM_SIBLING;
-                } else {
-                    current = parent; state = FROM_CHILD;
+    while (stackPointer >= 0) {
+        BVHNode node = GetBVH(stack[stackPointer]);
+        if (rayIntersectCuboid(ray, Cuboid(node.AABBMin, node.AABBMax, mesh.Material), loopRayHit)) {
+            // Process leaf
+            if (int(node.NumTriangles) > 0) {
+                if (rayIntersectBVHLeaf(ray, node, mesh.Material, loopRayHit) && loopRayHit.Distance < rayHit.Distance) {
+                    rayHit = loopRayHit;
                 }
-            break;
+                stackPointer--;
+                continue;
+            }
+            if (int(node.Child1) == -1) {
+                stackPointer--;
+                continue;
+            }
 
-            case FROM_SIBLING:
-                if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
-                    current = parent; state = FROM_CHILD;
-                } else if (current.NumTriangles > 0) {
-                    if (rayIntersectBVHLeaf(ray, current, loopRayHit)) {
-                        if (loopRayHit.Distance < rayHit.Distance) {
-                            rayHit = loopRayHit;
-                        }
-                    }
-                    current = parent; state = FROM_CHILD;
-                } else {
-                    current = GetNearChild(ray, current); state = FROM_PARENT;
-                }
-            break;
-
-            case FROM_PARENT:
-                if (!rayIntersectCuboid(ray, Cuboid(current.AABBMin, current.AABBMin, mesh.Material), loopRayHit)) {
-                    current = GetSibling(current, nearSibling, farSibling); state = FROM_SIBLING;
-                } else if (current.NumTriangles > 0) {
-                    if (rayIntersectBVHLeaf(ray, current, loopRayHit)) {
-                        if (loopRayHit.Distance < rayHit.Distance) {
-                            rayHit = loopRayHit;
-                        }
-                    }
-                    current = GetSibling(current, nearSibling, farSibling); state = FROM_SIBLING;
-                } else {
-                    current = GetNearChild(ray, current); state = FROM_PARENT;
-                }
-            break;
+            stack[stackPointer] = int(node.Child1);
+            stack[stackPointer+1] = int(node.Child2);
+            stackPointer++;
+        } else {
+            stackPointer--;
         }
     }
 
@@ -434,14 +413,13 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
     }
 
     for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
-        Mesh mesh = meshSSBO.Meshes[m];
+        Mesh mesh = meshSSBO.Meshes[0];
         if (rayIntersectMesh(ray, mesh, loopRayHit)) {
             if (loopRayHit.Distance < rayHit.Distance) {
                 rayHit = loopRayHit;
             }
         }
     }
-
     return rayHit.Distance < RAY_MAX;
 }
 

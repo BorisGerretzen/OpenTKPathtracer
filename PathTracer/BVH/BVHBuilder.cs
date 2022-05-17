@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using PathTracer.Helpers;
 
 namespace PathTracer.BVH;
 
@@ -14,14 +13,19 @@ public class BVHBuilder {
         BvhType = bvhType;
     }
 
+    /// <summary>
+    ///     Builds a BVH from the triangles in the object.
+    /// </summary>
+    /// <param name="numLeafTriangles">Max number of triangles in the leaf nodes</param>
+    /// <returns>The root node of the tree</returns>
+    /// <exception cref="InvalidEnumArgumentException">If invalid bvhType is specified in the constructor</exception>
     public BVHNode Build(int numLeafTriangles) {
         BVHNode root;
 
         if (BvhType == BVHType.SpatialSplit)
-            root = new BVHNodeSpatialSplit(BBHelpers.AABBFromVertices(Vertices), numLeafTriangles);
+            root = new BVHNodeSpatialSplit(numLeafTriangles, Triangles);
         else
             throw new InvalidEnumArgumentException("Invalid enum value specified");
-        root.AddTriangles(Triangles);
         // Depth first BVH construction
         var todo = new Stack<BVHNode>();
         todo.Push(root);

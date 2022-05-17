@@ -4,14 +4,13 @@ using PathTracer.Helpers;
 namespace PathTracer.BVH;
 
 public abstract class BVHNode : Uploadable {
-    public static int SizeInBytes = Vector4.SizeInBytes * 2 + AABB.SizeInBytes;
+    public static int SizeInBytes = Vector4.SizeInBytes * 1 + AABB.SizeInBytes;
 
     #region uploaded
-
     public int? TriangleOffset;
     public int ParentIndex;
     public readonly int[] ChildIndices = new int[2];
-    public readonly AABB BoundingBox;
+    public AABB BoundingBox;
     public Axis SplitAxis = Axis.None;
     #endregion
 
@@ -19,33 +18,41 @@ public abstract class BVHNode : Uploadable {
     public readonly BVHNode[] Children = new BVHNode[2];
     public readonly List<Triangle> Triangles;
 
-
+    /// <summary>
+    ///     Splits the current node into child nodes if needed according to the max number of triangles.
+    /// </summary>
     public abstract void Split();
 
-    public BVHNode(AABB boundingBox, int maxNumTriangles) {
+    /// <summary>
+    ///     Create a new bhv node from a list of triangles.
+    /// </summary>
+    /// <param name="maxNumTriangles">Max number of triangles allowed in a leaf node</param>
+    /// <param name="triangles">List of triangles</param>
+    public BVHNode(int maxNumTriangles, List<Triangle> triangles) {
         Triangles = new List<Triangle>();
-        BoundingBox = boundingBox;
-        MaxNumTriangles = maxNumTriangles;
-    }
-
-    public BVHNode(AABB boundingBox, BVHNode node1, BVHNode node2, int numTriangles) : this(boundingBox, numTriangles) {
-        SetChildren(node1, node2);
-    }
-
-    public void AddTriangles(List<Triangle> triangles) {
         Triangles.AddRange(triangles);
+        MaxNumTriangles = maxNumTriangles;
+        UpdateBounds();
     }
 
-    public void SetTriangles(List<Triangle> triangles) {
-        triangles.Clear();
-        AddTriangles(triangles);
-    }
-
+    /// <summary>
+    ///     Sets the children of this node.
+    /// </summary>
+    /// <param name="node1">Left child</param>
+    /// <param name="node2">Right child</param>
     public void SetChildren(BVHNode node1, BVHNode node2) {
         Children[0] = node1;
         Children[1] = node2;
     }
 
+    /// <summary>
+    ///     Updates the bounds of this node according to the triangles stored in it.
+    /// </summary>
+    private void UpdateBounds() {
+        var vertices = Triangles.SelectMany(triangle => triangle.Vertices).ToList();
+        BoundingBox = BBHelpers.AABBFromVertices(vertices);
+    }
+    
     /// <summary>
     ///     Flattens the current tree and build the indices so the nodes can reference each other without direct references
     ///     Needed for sending to gpu cause it cant handle stacks/recursion
@@ -59,10 +66,15 @@ public abstract class BVHNode : Uploadable {
         
         todo.Enqueue(this);
         var currentIndex = nodeOffset;
-
         while (todo.Count > 0) {
             var currentNode = todo.Dequeue();
+            // If node is a leaf node but has no triangles, set children to -1
+            if (currentNode.Triangles.Count == 0 && currentNode.Children[0] == null && currentNode.Children[1] == null) {
+                currentNode.ChildIndices[0] = -1;
+                currentNode.ChildIndices[1] = -1;
+            }
 
+            // If node is not a leaf node set child indices and add children to queue
             if (currentNode.Triangles.Count == 0 && currentNode.Children[0] != null && currentNode.Children[1] != null) {
                 currentNode.ChildIndices[0] = currentIndex + todo.Count + 1;
                 currentNode.Children[0].ParentIndex = currentIndex;
@@ -71,7 +83,7 @@ public abstract class BVHNode : Uploadable {
                 todo.Enqueue(currentNode.Children[0]);
                 todo.Enqueue(currentNode.Children[1]);
             }
-
+            
             currentNode.TriangleOffset = triangleOffset + triangles.Count;
 
             nodes.Add(currentNode);
@@ -94,8 +106,8 @@ public abstract class BVHNode : Uploadable {
         gpuData[2].Y = Triangles.Count;
         gpuData[2].Z = TriangleOffset.Value;
         gpuData[2].W = ParentIndex;
-        gpuData[3].X = ChildIndices[0];
-        gpuData[3].Y = ChildIndices[1];
+        gpuData[0].W = ChildIndices[0];
+        gpuData[1].W = ChildIndices[1];
         return gpuData;
     }
 }

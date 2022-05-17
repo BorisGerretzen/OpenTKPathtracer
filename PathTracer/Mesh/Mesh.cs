@@ -14,11 +14,16 @@ public class Mesh : Uploadable {
     public Material Material;
     public int? BVHIndex;
 
-    public Mesh(List<Vertex> vertices, List<Triangle> triangles, Material material, Vector3 aabbMin, Vector3 aabbMax) {
+    /// <summary>
+    ///     Creates a new mesh object
+    /// </summary>
+    /// <param name="vertices">Vertices of the mesh</param>
+    /// <param name="triangles">Triangles of the mesh</param>
+    /// <param name="material">Material of the mesh</param>
+    public Mesh(List<Vertex> vertices, List<Triangle> triangles, Material material) {
         Vertices = vertices;
         Triangles = triangles;
         Material = material;
-        //Vertices.ForEach(vertex => vertex.Position += position);
     }
 
 

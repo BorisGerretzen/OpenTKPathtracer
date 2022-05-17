@@ -61,7 +61,7 @@ public class Game : GameWindow {
     }
 
     private void LoadMeshes() {
-        _modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(5, 1, 2));
+        _modelHolder.AddModel("models/teapot.obj", Material.WhiteDiffuse, new Vector3(0, 0, 0));
     }
     
     protected override void OnLoad() {
@@ -110,8 +110,6 @@ public class Game : GameWindow {
         GL.ActiveTexture(TextureUnit.Texture1);
         _skyboxTexture = GL.CreateTexture(TextureTarget.TextureCubeMap); //GL.CreateTexture(TextureTarget.TextureCubeMap);
         GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
-        var rnd = new Random();
-
         foreach (var file in Directory.GetFiles(@"Images\Skybox"))
             using (var image = Image.Load(file)) {
                 image.Mutate(img => img.Flip(FlipMode.Horizontal));
@@ -121,7 +119,6 @@ public class Game : GameWindow {
                         2048, 0, PixelFormat.Rgb, PixelType.UnsignedByte, ms.ToArray());
                 }
             }
-
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
             (int)TextureMinFilter.Linear);
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter,
