@@ -18,10 +18,12 @@ Currently, the following material options are supported:
 - Glossy materials (mix of specular and diffuse)
 
 ## How to use
-You can move around in the scene using the ```WASD``` buttons, the ```spacebar``` and ```left shift``` are used to go up and down respectively.\
-To lock the camera in place and let the render progress even if you touch the keyboard or mouse accidentally, you can press the ```L``` button.\
-To take a screenshot of the current frame you can press the ```I``` button.\
-To exit the program press ```ESC```.
+1. You can move around in the scene using the ```WASD``` buttons, the ```spacebar``` and ```left shift``` are used to go up and down respectively.
+2. Once you have found a suitable location to render, press the `L` button to lock the camera into place.
+3. After the camera is locked, press the `Q` button to switch from to a higher ray depth.
+4. Wait for the render to progress...
+5. Press the `I` button to take a screenshot, be sure to smash it for a couple seconds because when the framerate is low it sometimes doesn't pick it up.
+6. Once you are done press the `ESC` key to exit the program.
 
 ## Future work
 - Next event estimation, to substantially reduce the convergence time.
