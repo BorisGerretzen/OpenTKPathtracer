@@ -23,7 +23,7 @@ public class Game : GameWindow {
     private readonly int _maxSpheres = 256;
     private SceneLoader _sceneLoader;
     private readonly Stopwatch _stopwatch = new();
-
+    private bool quality;
     private BufferHandle _basicDataUbo;
     private Camera _camera;
     private bool _cameraLocked;
@@ -45,6 +45,7 @@ public class Game : GameWindow {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
         _windowSize.Y = nativeWindowSettings.Size.Y;
+        quality = false;
     }
 
     private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity,
@@ -71,10 +72,11 @@ public class Game : GameWindow {
 
         // Create basic data UBO
         GL.CreateBuffer(out _basicDataUbo);
-        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes, IntPtr.Zero,
+        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4, IntPtr.Zero,
             BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
-            Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes);
+            Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4);
+        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
         
         // Create GameObjects UBO
         BufferHandle gameObjectsUbo;
@@ -161,64 +163,29 @@ public class Game : GameWindow {
         var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 40.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 50.0f);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
-        // // floor
-        // GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
-        // // roof
-        // GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
-        // // right wall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
-        // // left wall
-        // GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
-        // // backwall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse, _numCuboids++));
-        // // Frontwall
-        // GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
-        // //Light
-        // GameObjects.Add(new Cuboid(new Vector3(5f, 9.5f, 6), 1.0f, whiteLight, _numCuboids++));
-        // The big plane
-        //GameObjects.Add(new Cuboid(new Vector3(-100, -1, -100), new Vector3(100,0, 100), whiteDiffuse, _numCuboids++));
-
-        // Add different orbs 
-        // Add backwall
-        // GameObjects.Add(new Cuboid(new Vector3(3.5f, 0f, 0f), new Vector3(4f, 5f, 10f), new Material(Color.FromHex(0xFFAAAA), Vector3.Zero), _numCuboids++));
-
-        // The ball pit
-        // GameObjects.Add(new Cuboid(new Vector3(0f, -1f, 0f), new Vector3(3f, 0f, 8.5f), whiteDiffuse, _numCuboids++));
-        // GameObjects.Add(new Cuboid(new Vector3(-2f, 0f, 4.2f), new Vector3(-1.8f, 4.5f, 4.3f), whiteLight, _numCuboids++));
-        // for (int i = 0; i <= 5; i++) {
-        //     var material = new Material(
-        //         Color.FromHex(0xFFFFFF),
-        //         new Vector3(0.0f),
-        //         0.2f*i
-        //     );
-        //     GameObjects.Add(new Sphere(new Vector3(0.5f,1f,0.5f+1.5f*i), 0.5f, material, _numSpheres++));
-        // }
-        // for (int i = 0; i <= 5; i++) {
-        //     var material = new Material(
-        //         Color.FromHex(0xFFFFFF),
-        //         new Vector3(0.0f),
-        //         0f,
-        //         0.2f*i,
-        //         1.2f
-        //     );
-        //     GameObjects.Add(new Sphere(new Vector3(0.5f,2.5f,0.5f+1.5f*i), 0.5f, material, _numSpheres++));
-        // }
-        //
-        // Random rnd = new Random();
-        // for (int i = 0; i <= 5; i++) {
-        //     var material = new Material(
-        //         Color.FromHex(rnd.Next(0,16777215)),
-        //         Vector3.Zero
-        //     );
-        //     GameObjects.Add(new Sphere(new Vector3(0.5f,4f,0.5f+1.5f*i), 0.5f, material, _numSpheres++));
-        // }
+        // floor
+        _sceneLoader.AddCuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse);
+        // roof
+        _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse);
+        // right wall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse);
+        // left wall
+        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse);
+        // backwall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse);
+        // Frontwall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
+        //Light
+        _sceneLoader.AddCuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight);
+        _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5, 0, 2), Vector3.One * 30);
+        
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter("scene.xml", false);
         serializer.Serialize(writer, _sceneLoader.Scene);
@@ -308,6 +275,15 @@ public class Game : GameWindow {
                 DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
         }
 
+        if (KeyboardState.IsKeyDown(Keys.Q) && !_lastKeyboardState.IsKeyDown(Keys.Q)) {
+            quality = !quality;
+            if (quality)
+                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 10f);
+            else
+                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
+            _frameNumber = 0;
+        }
+        
         // Save image on press I
         if (KeyboardState.IsKeyDown(Keys.I) && !_lastKeyboardState.IsKeyDown(Keys.I)) {
             GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
@@ -378,7 +354,7 @@ public class Game : GameWindow {
             GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4,
                 _camera.GetViewMatrix().Inverted());
             GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes,
-                _camera.Position);
+                new Vector4(_camera.Position));
             _frameNumber = 0;
         }
     }

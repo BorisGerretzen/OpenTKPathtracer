@@ -69,7 +69,7 @@ public class SceneLoader {
     public void Upload() {
         Scene.Cuboids.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
         Scene.Spheres.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
-        Scene.Meshes.ForEach(mesh => _modelHolder.AddModel(mesh.Path, mesh.Material, mesh.Position, mesh.Scale));
+        Scene.Meshes.ForEach(mesh => _modelHolder.AddModel(mesh));
         _modelHolder.UploadModels();
     }
 
