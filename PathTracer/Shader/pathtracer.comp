@@ -1,0 +1,520 @@
+﻿#version 460
+#define RAYS_PER_PIXEL 1
+#define RAY_MAX 10000.0
+#define PI 3.1415926535
+#define MAX_TRIANGLES 255
+
+#define FROM_PARENT 0
+#define FROM_SIBLING 1
+#define FROM_CHILD 2
+
+#define SPLIT_X 0
+#define SPLIT_Y 1
+#define SPLIT_Z 2
+
+layout (local_size_x=8, local_size_y=4, local_size_z=1) in;
+layout (binding=0, rgba32f) uniform image2D imgOut;
+layout (binding=1) uniform samplerCube skybox;
+layout (location=0) uniform uint currentFrameIndex;
+layout (location=1) uniform ivec2 gameObjectsSize;
+
+// ---------- Structs ---------- //
+struct Material
+{
+    vec3 Emission;
+    float Specularity;
+    vec3 Albedo;
+    float Refractivity;
+    float IndexOfRefraction;
+};
+
+struct Sphere
+{
+    vec3 Position;
+    float Radius;
+    Material Material;
+};
+
+struct Cuboid
+{
+    vec3 Min;
+    vec3 Max;
+    Material Material;
+};
+
+struct Ray
+{
+    vec3 Origin;
+    vec3 Direction;
+};
+
+struct RayHit
+{
+    vec3 Position;
+    vec3 Normal;
+    float Distance;
+    bool FromInside;
+    Material Material;
+};
+
+struct Vertex {
+    vec3 Position;
+    vec3 Normal;
+    vec2 TextureCoordinates;
+};
+
+struct Triangle {
+    int index1;
+    int index2;
+    int index3;
+    int usedForFillerDoNotUseThisVariable;
+};
+
+struct BVHNode {
+    vec3 AABBMin;
+    float Child1;// Child 1 smallest on the split axis
+    vec3 AABBMax;
+    float Child2;
+    float SplitAxis;
+    float NumTriangles;
+    float TriangleOffset;
+    float ParentIndex;
+};
+
+struct Mesh {
+    float BVHIndex;
+    Material Material;
+//sampler2D DiffuseMap;
+//sampler2D SpecularityMap;
+//sampler2D RefractMap;
+};
+
+
+// ---------- End structs ---------- //
+
+// ---------- Inputs ---------- //
+// Some linear algebra magic
+layout(std140, binding = 0) uniform BasicDataUBO {
+    mat4 InverseProjectionMatrix;
+    mat4 InverseViewMatrix;
+    vec4 ViewPosition;
+    float numBounces;
+} basicDataUBO;
+
+// Game objects that will be rendered
+layout(std140, binding = 1) uniform GameObjectsUBO {
+    Sphere Spheres[256];
+    Cuboid Cuboids[64];
+} gameObjectsUBO;
+layout(std140, binding=2) buffer MeshSSBO {
+    Mesh Meshes[];
+} meshSSBO;
+layout(std140, binding=3) buffer VerticesSSBO {
+    Vertex Vertices[];
+} verticesSSBO;
+layout(std430, binding=4) buffer TrianglesSSBO {
+    Triangle Triangles[];
+} trianglesSSBO;
+
+// BVH
+layout(std140, binding = 5) uniform BVHMetadata {
+    int NumBVs;
+} bvhMetaData;
+layout(std140, binding=6) buffer BVHSSBO {
+    BVHNode BVHNodes[];
+} bvhSSBO;
+// ---------- End inputs ---------- //
+
+uint rndSeed;
+
+// ---------- Random number stuff idk whats going on here ---------- // 
+// https://blog.demofox.org/2020/05/25/casual-shadertoy-path-tracing-1-basic-camera-diffuse-emissive/
+// https://github.com/BoyBaykiller/OpenTK-PathTracer/blob/master/OpenTK-PathTracer/res/shaders/PathTracing/compute.glsl
+uint GetPCGHash(inout uint seed)
+{
+    seed = seed * 747796405u + 2891336453u;
+    uint word = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float GetRandomFloat01()
+{
+    return float(GetPCGHash(rndSeed)) / 4294967296.0;
+}
+
+vec3 CosineSampleHemisphere(vec3 normal)
+{
+    float z = GetRandomFloat01() * 2.0 - 1.0;
+    float a = GetRandomFloat01() * 2.0 * PI;
+    float r = sqrt(1.0 - z * z);
+    float x = r * cos(a);
+    float y = r * sin(a);
+    return normalize(normal + vec3(x, y, z));
+}
+
+// ---------- End random number stuff ---------- //
+// Checks if a given ray intersects with a given sphere.
+// If so, rayHit will be populated with the data of the intersection.
+bool rayIntersectSphere(Ray ray, Sphere sphere, out RayHit rayHit)
+{
+    float t = dot(sphere.Position - ray.Origin, ray.Direction);
+    vec3 closestPointOnLine = ray.Origin + ray.Direction * t;
+    float distanceFromLine = length(sphere.Position - closestPointOnLine);
+
+    // If ray hits sphere, calculate ray hit coordinates
+    if (distanceFromLine < sphere.Radius)
+    {
+        float x = sqrt(sphere.Radius * sphere.Radius - distanceFromLine * distanceFromLine);
+        float t1 = t - x;
+        float t2 = t + x;
+        float target;
+        if (t1 > 0 && t1 < t2) {
+            target = t1;
+        } else if (t2 > 0 && t2 < t1) {
+            target = t2;
+        } else {
+            return false;
+        }
+
+        rayHit.Position = ray.Origin + ray.Direction * target;
+        rayHit.Distance = target;
+        rayHit.FromInside = target == t2;
+        rayHit.Normal = normalize(rayHit.Position-sphere.Position);
+        rayHit.Material = sphere.Material;
+        return true;
+    }
+    return false;
+}
+
+bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
+    vec3 a1 = (cuboid.Min - ray.Origin) / ray.Direction;
+    vec3 a2 = (cuboid.Max - ray.Origin) / ray.Direction;
+
+    vec3 tsmall = min(a1, a2);
+    vec3 tlarge = max(a1, a2);
+
+    float t1 = max(-3.4028235e+38, max(tsmall.x, max(tsmall.y, tsmall.z)));
+    float t2 = min(3.4028235e+38, min(tlarge.x, min(tlarge.y, tlarge.z)));
+
+    float target = t1;
+
+    // AABB behind us
+    if (t2 < 0) {
+        return false;
+    }
+
+    // if tmin > tmax, ray doesn't intersect AABB
+    if (t1 > t2) {
+        return false;
+    }
+
+    if (t1 > 0 && t1 < t2) {
+        target = t1;
+    } else if (t2 > 0 && t2 < t1) {
+        target = t2;
+    } else {
+        return false;
+    }
+    vec3 position = ray.Origin + ray.Direction*target;
+
+    vec3 halfSize = (cuboid.Max - cuboid.Min) * 0.5;
+    vec3 centerSurface = position - (cuboid.Max + cuboid.Min) * 0.5;
+
+    vec3 normal = vec3(0.0);
+    normal += vec3(sign(centerSurface.x), 0.0, 0.0) * step(abs(abs(centerSurface.x) - halfSize.x), 0.001f);
+    normal += vec3(0.0, sign(centerSurface.y), 0.0) * step(abs(abs(centerSurface.y) - halfSize.y), 0.001f);
+    normal += vec3(0.0, 0.0, sign(centerSurface.z)) * step(abs(abs(centerSurface.z) - halfSize.z), 0.001f);
+
+    rayHit.Distance = target;
+    rayHit.Material = cuboid.Material;
+    rayHit.FromInside = target == t2;
+    rayHit.Position = position;
+    rayHit.Normal = normalize(normal);
+    return true;
+}
+
+bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, Material material, out RayHit rayHit) {
+    vec3 v1v2 = v2.Position - v1.Position;
+    vec3 v1v3 = v3.Position - v1.Position;
+    vec3 normal = cross(v1v2, v1v3);
+    float dotNormalDirection = dot(ray.Direction, normal);
+
+    // Ray parallel to the plane -> no intersection
+    if (abs(dotNormalDirection) < 0.001f) {
+        return false;
+    }
+
+    float t = (dot(v1.Position, normal)-dot(ray.Origin, normal))/dotNormalDirection;
+    if (t<0) {
+        return false;
+    }
+    vec3 planeIntersection = ray.Origin + ray.Direction*t;
+
+    if (dot(cross((v2.Position-v1.Position), (planeIntersection-v1.Position)), normal) < 0) {
+        return false;
+    }
+    if (dot(cross((v3.Position-v2.Position), (planeIntersection-v2.Position)), normal) < 0) {
+        return false;
+    }
+    if (dot(cross((v1.Position-v3.Position), (planeIntersection-v3.Position)), normal) < 0) {
+        return false;
+    }
+
+    rayHit.Distance = t;
+    rayHit.Position = planeIntersection;
+    rayHit.FromInside = false;
+    rayHit.Normal = normalize(normal);
+    rayHit.Material = material;
+    return true;
+}
+
+// Creates a ray from given normalized device coordinates into the scene in world coordinates.
+Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 viewPos, vec2 normalizedDeviceCoords)
+{
+    // https://antongerdelan.net/opengl/raycasting.html
+    // 4d Homogeneous Clip Coordinates
+    vec4 rayClip = vec4(normalizedDeviceCoords.xy, -1.0, 1.0);
+
+    // 4d camera coordinates
+    vec4 rayCamera = inverseProjectionMatrix * vec4(normalizedDeviceCoords, -1.0, 0.0);
+    rayCamera.zw = vec2(-1.0, 0.0);
+
+    // 3d World Coordinates
+    vec3 rayWorld = normalize((inverseViewMatrix * rayCamera).xyz);
+    return Ray(viewPos, rayWorld);
+}
+
+BVHNode GetNearChild(Ray ray, BVHNode node) {
+    if (int(node.SplitAxis) == SPLIT_X) {
+        if (ray.Direction.x > 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    } else if (int(node.SplitAxis) == SPLIT_Y) {
+        if (ray.Direction.y > 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    } else {
+        if (ray.Direction.z > 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    }
+}
+BVHNode GetFarChild(Ray ray, BVHNode node) {
+    if (node.SplitAxis == SPLIT_X) {
+        if (ray.Direction.x < 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    } else if (node.SplitAxis == SPLIT_Y) {
+        if (ray.Direction.y < 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    } else {
+        if (ray.Direction.z < 0) {
+            return bvhSSBO.BVHNodes[int(node.Child1)];
+        } else {
+            return bvhSSBO.BVHNodes[int(node.Child2)];
+        }
+    }
+}
+BVHNode GetBVH(int BVHIndex) {
+    return bvhSSBO.BVHNodes[BVHIndex];
+}
+
+BVHNode GetSibling(BVHNode node, BVHNode near, BVHNode far) {
+    return node == near ? far : near;
+}
+
+bool rayIntersectBVHLeaf(Ray ray, BVHNode node, Material material, out RayHit closestRayHit) {
+    RayHit loopRayHit;
+    closestRayHit.Distance = RAY_MAX;
+    for (int i = 0; i < int(node.NumTriangles); i++) {
+        Triangle triangle = trianglesSSBO.Triangles[i+int(node.TriangleOffset)];
+        Vertex v1 = verticesSSBO.Vertices[triangle.index1];
+        Vertex v2 = verticesSSBO.Vertices[triangle.index2];
+        Vertex v3 = verticesSSBO.Vertices[triangle.index3];
+
+        if (rayIntersectTriangle(ray, v1, v2, v3, material, loopRayHit)) {
+            if (loopRayHit.Distance < closestRayHit.Distance) {
+                closestRayHit = loopRayHit;
+            }
+        }
+    }
+    
+    return closestRayHit.Distance < RAY_MAX;
+}
+
+bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
+    RayHit loopRayHit;
+    rayHit.Distance = RAY_MAX;
+    int stack[32];
+    int stackPointer = 0;
+    stack[0] = int(mesh.BVHIndex);
+
+    while (stackPointer >= 0) {
+        BVHNode node = GetBVH(stack[stackPointer]);
+        if (rayIntersectCuboid(ray, Cuboid(node.AABBMin, node.AABBMax, mesh.Material), loopRayHit)) {
+            // Process leaf
+            if (int(node.NumTriangles) > 0) {
+                if (rayIntersectBVHLeaf(ray, node, mesh.Material, loopRayHit) && loopRayHit.Distance < rayHit.Distance) {
+                    rayHit = loopRayHit;
+                }
+                stackPointer--;
+                continue;
+            }
+            if (int(node.Child1) == -1) {
+                stackPointer--;
+                continue;
+            }
+
+            stack[stackPointer] = int(node.Child1);
+            stack[stackPointer+1] = int(node.Child2);
+            stackPointer++;
+        } else {
+            stackPointer--;
+        }
+    }
+
+    return rayHit.Distance < RAY_MAX;
+}
+
+// Checks if a given ray intersects any gameobject in the scene.
+// If so, rayHit will be populated with the data of the intersection closest to the camera.
+bool GetRayIntersection(Ray ray, out RayHit rayHit)
+{
+    RayHit loopRayHit;
+    rayHit.Distance = RAY_MAX;
+    for (int i = 0; i < gameObjectsSize.x; i++) {
+        Sphere sphere = gameObjectsUBO.Spheres[i];
+
+        if (rayIntersectSphere(ray, sphere, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
+    }
+    for (int i = 0; i < gameObjectsSize.y; i++) {
+        Cuboid cuboid = gameObjectsUBO.Cuboids[i];
+
+        if (rayIntersectCuboid(ray, cuboid, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
+    }
+
+    for (int m = 0; m < meshSSBO.Meshes.length(); m++) {
+        Mesh mesh = meshSSBO.Meshes[m];
+        if (rayIntersectMesh(ray, mesh, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
+    }
+    return rayHit.Distance < RAY_MAX;
+}
+
+float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted) {
+    float rayProbability;
+    vec3 newRayDirection;
+
+    float reflectRoll = GetRandomFloat01();
+    if (rayHit.Material.Specularity > reflectRoll) {
+        newRayDirection = reflect(ray.Direction, rayHit.Normal);
+        rayProbability = rayHit.Material.Specularity;
+    } else if (rayHit.Material.Specularity + rayHit.Material.Refractivity > reflectRoll) {
+        newRayDirection = refract(ray.Direction, rayHit.Normal, rayHit.FromInside ? rayHit.Material.IndexOfRefraction:1.0f/rayHit.Material.IndexOfRefraction);
+        rayProbability = rayHit.Material.Refractivity;
+        refracted = true;
+    }
+    else {
+        newRayDirection = CosineSampleHemisphere(rayHit.Normal);
+        rayProbability = 1.0f - rayHit.Material.Specularity - rayHit.Material.Refractivity;
+    }
+
+    newRay.Direction = normalize(newRayDirection);
+    newRay.Origin = rayHit.Position + newRay.Direction*0.001f;
+
+    return max(rayProbability, 0.001f);
+}
+
+// Gets the color of a given ray with all the bounces and stuff.
+vec3 getColor(Ray ray)
+{
+    RayHit rayHit;
+    vec3 color = vec3(0.0);
+    vec3 throughput = vec3(1.0);
+
+    for (int i = 0; i < int(basicDataUBO.numBounces); i++)
+    {
+        if (GetRayIntersection(ray, rayHit))
+        {
+            if (rayHit.FromInside) {
+                rayHit.Normal *= -1.0;
+            }
+            // Mix the colors
+            color += rayHit.Material.Emission * throughput;
+
+            // Get BSDF
+            bool refracted;
+            Ray newRay;
+            float rayProbability = BRDF(ray, rayHit, newRay, refracted);
+            ray = newRay;
+
+            throughput *= rayHit.Material.Albedo;
+            throughput /= rayProbability;
+
+            // Russian roulette
+            float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
+            if (GetRandomFloat01() > propagationChance) {
+                break;
+            }
+            throughput /= propagationChance;
+        }
+        else
+        {
+            //color += normalize(ray.Direction);
+            color += texture(skybox, ray.Direction).rgb * throughput;
+            //color += throughput * vec3(0.3f);
+            break;
+        }
+    }
+    return color;
+}
+
+void main()
+{
+    // random number stuff
+    rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + currentFrameIndex * 2699 | 1;
+
+    // Get pixel coordinates as well as normalized between [-1,1]
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    // Shoot out a couple rays, the average color will be the color of the pixel
+    vec3 color = vec3(0.0);
+    for (int i = 0; i < RAYS_PER_PIXEL; i++)
+    {
+        vec2 offset = vec2(GetRandomFloat01(), GetRandomFloat01());
+        vec2 normalizedDeviceCoordinates = vec2(pos+offset) / vec2(imageSize(imgOut)) * 2 - 1;
+        Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition.xyz, normalizedDeviceCoordinates);
+        vec3 newC = getColor(ray);
+        color += newC;
+    }
+
+    color /= RAYS_PER_PIXEL;
+
+    // Progressive rendering
+    vec3 lastColor = imageLoad(imgOut, pos).rgb;
+    color = mix(lastColor, color, 1.0f/(currentFrameIndex+1));
+
+    // Store it in the image and were done
+    imageStore(imgOut, pos, vec4(color, 1.0));
+}

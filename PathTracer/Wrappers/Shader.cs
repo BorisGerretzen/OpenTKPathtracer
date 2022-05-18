@@ -10,6 +10,11 @@ public class Shader : IDisposable {
         Handle = GL.CreateShader(shaderType);
         GL.ShaderSource(Handle, File.ReadAllText(filename));
         GL.CompileShader(Handle);
+        Console.WriteLine($"Shader '{filename}' compiled successfully.");
+
+        string info;
+        GL.GetShaderInfoLog(Handle, out info);
+        Console.WriteLine(info);
 
         Console.WriteLine($"Shader '{filename}' compiled successfully.");
     }

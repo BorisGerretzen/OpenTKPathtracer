@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Xml.Serialization;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
@@ -10,44 +11,45 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using PathTracer.Helpers;
+using PathTracer.Scene;
+using SixLabors.ImageSharp.Processing;
+using Image = SixLabors.ImageSharp.Image;
 using PixelFormat = OpenTK.Graphics.OpenGL.PixelFormat;
 
 namespace PathTracer;
 
 public class Game : GameWindow {
     private readonly int _maxCuboids = 64;
-
     private readonly int _maxSpheres = 256;
-    public readonly List<GameObject> GameObjects = new();
-
+    private SceneLoader _sceneLoader;
+    private readonly Stopwatch _stopwatch = new();
+    private bool quality;
     private BufferHandle _basicDataUbo;
     private Camera _camera;
-
     private bool _cameraLocked;
-    private uint _lastFrameCount;
     private bool _firstMove;
     private FramebufferHandle _framebufferHandle;
     private uint _frameNumber;
-    private BufferHandle _gameObjectsUbo;
+    private uint _lastFrameCount;
 
     private KeyboardState _lastKeyboardState;
     private Vector2 _lastPos;
-    private int _numCuboids;
-    private int _numSpheres;
     private ShaderProgram _shaderProgram;
-
-    private readonly Stopwatch _stopwatch = new();
+    private TextureHandle _skyboxTexture;
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
     private GLDebugProc callback;
 
-    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(gameWindowSettings, nativeWindowSettings) {
+    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
+        gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
         _windowSize.Y = nativeWindowSettings.Size.Y;
+        quality = false;
     }
 
-    private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam) {
+    private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity,
+        int length, IntPtr message, IntPtr userParam) {
         var errorString = source == DebugSource.DebugSourceApplication
             ? $"OpenGL - {Marshal.PtrToStringAnsi(message, length)}"
             : $"OpenGL - {Marshal.PtrToStringAnsi(message, length)}\n\tid:{id} severity:{severity} type:{type} source:{source}\n";
@@ -56,6 +58,8 @@ public class Game : GameWindow {
     }
 
     protected override void OnLoad() {
+        GL.Enable(EnableCap.TextureCubeMapSeamless);
+
         base.OnLoad();
 
         // Enable debugging
@@ -63,24 +67,32 @@ public class Game : GameWindow {
         GL.Enable(EnableCap.DebugOutputSynchronous);
         callback = OpenGlDebugCallback;
         GL.DebugMessageCallback(callback, IntPtr.Zero);
-        GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Debug callback initialized");
+        GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+            DebugSeverity.DebugSeverityNotification, -1, "Debug callback initialized");
 
         // Create basic data UBO
         GL.CreateBuffer(out _basicDataUbo);
-        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes);
-
+        GL.NamedBufferStorage(_basicDataUbo, Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4, IntPtr.Zero,
+            BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
+            Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4);
+        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
+        
         // Create GameObjects UBO
-        GL.CreateBuffer(out _gameObjectsUbo);
-        GL.NamedBufferStorage(_gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes, IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
-        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, _gameObjectsUbo, IntPtr.Zero, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
+        BufferHandle gameObjectsUbo;
+        GL.CreateBuffer(out gameObjectsUbo);
+        GL.NamedBufferStorage(gameObjectsUbo, _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes,
+            IntPtr.Zero, BufferStorageMask.DynamicStorageBit);
+        GL.BindBufferRange(BufferTargetARB.UniformBuffer, 1, gameObjectsUbo, IntPtr.Zero,
+            _maxSpheres * Sphere.SizeInBytes + _maxCuboids * Cuboid.SizeInBytes);
 
         // Create texture to render to
-        _textureHandle = GL.CreateTexture(TextureTarget.Texture2d);
         GL.ActiveTexture(TextureUnit.Texture0);
+        _textureHandle = GL.CreateTexture(TextureTarget.Texture2d);
         GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
         GL.TextureParameteri(_textureHandle, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
+            PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
 
         // Create framebuffer to display rendered frame
         _framebufferHandle = GL.GenFramebuffer();
@@ -89,67 +101,94 @@ public class Game : GameWindow {
         GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _framebufferHandle);
         GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, new FramebufferHandle(0));
 
+        // Load skybox texture
+        GL.ActiveTexture(TextureUnit.Texture1);
+        _skyboxTexture = GL.CreateTexture(TextureTarget.TextureCubeMap); //GL.CreateTexture(TextureTarget.TextureCubeMap);
+        GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
+        foreach (var file in Directory.GetFiles(@"Images\Skybox"))
+            using (var image = Image.Load(file)) {
+                image.Mutate(img => img.Flip(FlipMode.Horizontal));
+                using (var ms = new MemoryStream()) {
+                    image.Save(ms, new RawBytesEncoder());
+                    GL.TexImage2D(Texture.CubeMapTextureTargetFromString(file), 0, (int)InternalFormat.Rgb, 2048,
+                        2048, 0, PixelFormat.Rgb, PixelType.UnsignedByte, ms.ToArray());
+                }
+            }
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
+            (int)TextureMinFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter,
+            (int)TextureMagFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
+        
         // Load compute shader
-        _shaderProgram = new ShaderProgram(new List<Shader> { new("Shader/pathtracer.compute", ShaderType.ComputeShader) });
+        _shaderProgram = new ShaderProgram(new List<Shader>
+            { new("Shader/pathtracer.comp", ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
-        // Spawn objects
-        CreateScene();
+        // Create Vertex, indices, mesh, BVH buffer handles
+        BufferHandle vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle;
+        GL.CreateBuffer(out vertexBufferHandle);
+        GL.CreateBuffer(out indicesBufferHandle);
+        GL.CreateBuffer(out meshBufferHandle);
+        GL.CreateBuffer(out bvhMetadataHandle);
+        GL.CreateBuffer(out bvhBufferHandle);
+        GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, vertexBufferHandle);
+        GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, indicesBufferHandle);
+        GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, meshBufferHandle);
+        GL.BindBuffer(BufferTargetARB.UniformBuffer, bvhMetadataHandle);
+        GL.BindBuffer(BufferTargetARB.ShaderStorageBuffer, bvhBufferHandle);
 
+        // Load scene
+        var modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
+        _sceneLoader = new SceneLoader(_maxCuboids, _maxSpheres, gameObjectsUbo, modelHolder);
+        CreateScene();
+        _sceneLoader.Upload();
+        
         // Spawn camera
-        _camera = new Camera(new Vector3(5, 5, 5), Size.X / (float)Size.Y);
+        _camera = new Camera(new Vector3(5, 2, 2), Size.X / (float)Size.Y);
         CursorGrabbed = true;
     }
 
     private void CreateScene() {
-        _numSpheres = 0;
-        _numCuboids = 0;
-        var whiteDiffuse = new Material(new Vector3(1, 1, 1), new Vector3(0));
-        var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0), 1.0f);
+        var whiteDiffuse = new Material(new Vector3(0.9f, 0.9f, 0.9f), new Vector3(0));
+        var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0.2f, 0.2f, 0.2f), 0.02f, 0.98f, 1.52f);
+        var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0, 0, 0), 1f);
         var redDiffuse = new Material(new Vector3(1, 0.3f, 0.3f), new Vector3(0.0f));
-        var greenDiffuse = new Material(new Vector3(0.2f, 0.8f, 0.2f), new Vector3(0));
+        var greenDiffuse = new Material(new Vector3(0.65f, 0.3f, 0.65f), new Vector3(0));
         var blueDiffuse = new Material(new Vector3(0.3f, 0.3f, 1), new Vector3(0));
 
         var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
+        var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 30.0f);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 50.0f);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
-        // Non emissive sphere
-        //GameObjects.Add(new Sphere(new Vector3(0, 0, 0), 0.2f, whiteDiffuse, _numSpheres++));
-
         // floor
-        GameObjects.Add(new Cuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse, _numCuboids++));
+        _sceneLoader.AddCuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse);
         // roof
-        GameObjects.Add(new Cuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse, _numCuboids++));
-
+        _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse);
         // right wall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse, _numCuboids++));
-
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse);
         // left wall
-        GameObjects.Add(new Cuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse, _numCuboids++));
-
+        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse);
         // backwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, 9), new Vector3(10, 10, 10), whiteDiffuse, _numCuboids++));
-
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse);
         // Frontwall
-        GameObjects.Add(new Cuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse, _numCuboids++));
-
-        GameObjects.Add(new Sphere(new Vector3(3, 4f, 4), 1, whiteDiffuseReflective, _numSpheres++));
-        GameObjects.Add(new Cuboid(new Vector3(2, 1, 3), new Vector3(4, 3, 5), whiteDiffuse, _numCuboids++));
-        GameObjects.Add(new Sphere(new Vector3(6, 3, 6), 2, whiteDiffuseReflective, _numSpheres++));
-
-
-        // light
-        GameObjects.Add(new Cuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight, _numCuboids++));
-        // Emissive spheres 120 deg
-        //GameObjects.Add(new Sphere(new Vector3(0, 0, 4f), 1, greenLight, _numSpheres++));
-        //GameObjects.Add(new Sphere(new Vector3(0.866f * 4f, 0, -0.5f * 4f), 1, redLight, _numSpheres++));
-        //GameObjects.Add(new Sphere(new Vector3(-0.866f * 4f, 0, -0.5f * 4f), 1, blueLight, _numSpheres++));
-
-
-        foreach (var gameObject in GameObjects) gameObject.Upload(_gameObjectsUbo);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
+        //Light
+        _sceneLoader.AddCuboid(new Vector3(4.5f, 9.5f, 3.5f), new Vector3(5.5f, 10f, 4.5f), whiteLight);
+        _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5, 0, 2), Vector3.One * 30);
+        
+        var serializer = new XmlSerializer(typeof(Scene.Scene));
+        var writer = new StreamWriter("scene.xml", false);
+        serializer.Serialize(writer, _sceneLoader.Scene);
         _stopwatch.Start();
     }
 
@@ -158,8 +197,11 @@ public class Game : GameWindow {
         _camera.AspectRatio = e.Width / (float)e.Height;
         _windowSize.X = e.Width;
         _windowSize.Y = e.Height;
-        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4, _camera.GetProjectionMatrix().Inverted());
-        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)0, Vector4.SizeInBytes * 4,
+            _camera.GetProjectionMatrix().Inverted());
+        GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
+        GL.TexImage2D(TextureTarget.Texture2d, 0, (int)InternalFormat.Rgba32f, _windowSize.X, _windowSize.Y, 0,
+            PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
         _frameNumber = 0;
     }
 
@@ -174,13 +216,24 @@ public class Game : GameWindow {
         base.OnRenderFrame(args);
 
         _shaderProgram.SetUniformUInt(0, _frameNumber++);
-        _shaderProgram.SetUniformVec2(1, new Vector2(_numSpheres, _numCuboids));
+        _shaderProgram.SetUniformVec2(1, _sceneLoader.GetBasicData());
 
-        GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
+        // GL.BindTexture(TextureTarget.Texture2d, _textureHandle);
+        GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMinFilter,
+            (int)TextureMinFilter.Linear);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureMagFilter,
+            (int)TextureMagFilter.Nearest);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
+
         GL.BindImageTexture(0, _textureHandle, 0, 0, 0, BufferAccessARB.ReadWrite, InternalFormat.Rgba32f);
+
         GL.DispatchCompute((uint)(_windowSize.X + 8 - 1) / 8, (uint)(_windowSize.Y + 4 - 1) / 4, 1);
         GL.MemoryBarrier(MemoryBarrierMask.TextureFetchBarrierBit);
-        GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+        GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y,
+            ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
         SwapBuffers();
     }
 
@@ -192,10 +245,14 @@ public class Game : GameWindow {
         GL.ReadPixels(0, 0, _windowSize.X, _windowSize.Y, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
         var fixedPixels = new byte[_windowSize.X * _windowSize.Y * 4];
 
-        for (var y = 0; y < _windowSize.Y; y++) Array.Copy(pixels, y * _windowSize.X * 4, fixedPixels, (_windowSize.X * _windowSize.Y - (y + 1) * _windowSize.X) * 4, _windowSize.X * 4);
+        for (var y = 0; y < _windowSize.Y; y++)
+            Array.Copy(pixels, y * _windowSize.X * 4, fixedPixels,
+                (_windowSize.X * _windowSize.Y - (y + 1) * _windowSize.X) * 4, _windowSize.X * 4);
         var bmp = new Bitmap(_windowSize.X, _windowSize.Y, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        var bmpData = bmp.LockBits(new Rectangle(0, 0, _windowSize.X, _windowSize.Y), ImageLockMode.WriteOnly, bmp.PixelFormat);
+        var bmpData = bmp.LockBits(new Rectangle(0, 0, _windowSize.X, _windowSize.Y), ImageLockMode.WriteOnly,
+            bmp.PixelFormat);
         Marshal.Copy(fixedPixels, 0, bmpData.Scan0, fixedPixels.Length);
+
         bmp.UnlockBits(bmpData);
         bmp.Save($"{name}.png", ImageFormat.Png);
     }
@@ -214,14 +271,26 @@ public class Game : GameWindow {
         if (KeyboardState.IsKeyDown(Keys.L) && !_lastKeyboardState.IsKeyDown(Keys.L)) {
             _cameraLocked = !_cameraLocked;
             var lockState = _cameraLocked ? "locked" : "unlocked";
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
         }
 
+        if (KeyboardState.IsKeyDown(Keys.Q) && !_lastKeyboardState.IsKeyDown(Keys.Q)) {
+            quality = !quality;
+            if (quality)
+                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 10f);
+            else
+                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
+            _frameNumber = 0;
+        }
+        
         // Save image on press I
         if (KeyboardState.IsKeyDown(Keys.I) && !_lastKeyboardState.IsKeyDown(Keys.I)) {
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Starting image export");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, "Starting image export");
             SaveImage();
-            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0, DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
         }
 
 
@@ -282,8 +351,10 @@ public class Game : GameWindow {
         }
 
         if (cameraMoved || _frameNumber == 0) {
-            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4, _camera.GetViewMatrix().Inverted());
-            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes, _camera.Position);
+            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 4), Vector4.SizeInBytes * 4,
+                _camera.GetViewMatrix().Inverted());
+            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 8), Vector4.SizeInBytes,
+                new Vector4(_camera.Position));
             _frameNumber = 0;
         }
     }

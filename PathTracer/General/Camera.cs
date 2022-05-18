@@ -39,6 +39,8 @@ public class Camera {
 
     public Vector3 Right { get; private set; } = Vector3.UnitX;
 
+    public void LookAt(Vector3 target) { }
+    
     // We convert from degrees to radians as soon as the property is set to improve performance.
     public float Pitch {
         get => MathHelper.RadiansToDegrees(_pitch);
@@ -76,6 +78,7 @@ public class Camera {
     // Get the view matrix using the amazing LookAt function described more in depth on the web tutorials
     public Matrix4 GetViewMatrix() {
         return Matrix4.LookAt(Position, Position + _front, Up);
+        // return Matrix4.LookAt(Position, new Vector3(5, 1, 5), Up);
     }
 
     // Get the projection matrix using the same method we have used up until this point

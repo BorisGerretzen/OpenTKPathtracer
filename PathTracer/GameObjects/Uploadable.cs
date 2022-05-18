@@ -1,11 +1,12 @@
-﻿using OpenTK.Graphics;
+﻿using System.Text.Json.Serialization;
+using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 
 namespace PathTracer;
 
 public abstract class Uploadable {
-    public abstract int BufferOffset { get; }
+    [JsonIgnore] public abstract int BufferOffset { get; }
     public abstract Vector4[] GetGPUData();
 
     public void Upload(BufferHandle handle) {
