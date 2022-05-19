@@ -210,10 +210,8 @@ bool rayIntersectCuboid(Ray ray, Cuboid cuboid, out RayHit rayHit) {
 
     if (t1 > 0) {
         target = t1;
-    } else if (t2 > 0) {
-        target = t2;
     } else {
-        return false;
+        target = t2;
     }
     vec3 position = ray.Origin + ray.Direction*target;
 
@@ -284,45 +282,46 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
     return Ray(viewPos, rayWorld);
 }
 
-BVHNode GetNearChild(Ray ray, BVHNode node) {
+int GetNearChild(Ray ray, BVHNode node) {
     if (int(node.SplitAxis) == SPLIT_X) {
         if (ray.Direction.x > 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     } else if (int(node.SplitAxis) == SPLIT_Y) {
         if (ray.Direction.y > 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     } else {
         if (ray.Direction.z > 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     }
 }
-BVHNode GetFarChild(Ray ray, BVHNode node) {
+
+int GetFarChild(Ray ray, BVHNode node) {
     if (node.SplitAxis == SPLIT_X) {
         if (ray.Direction.x < 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     } else if (node.SplitAxis == SPLIT_Y) {
         if (ray.Direction.y < 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     } else {
         if (ray.Direction.z < 0) {
-            return bvhSSBO.BVHNodes[int(node.Child1)];
+            return int(node.Child1);
         } else {
-            return bvhSSBO.BVHNodes[int(node.Child2)];
+            return int(node.Child2);
         }
     }
 }
@@ -362,7 +361,18 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
 
     while (stackPointer >= 0) {
         BVHNode node = GetBVH(stack[stackPointer]);
+
+        if (int(node.Child1) == -1) {
+            stackPointer--;
+            continue;
+        }
+
         if (rayIntersectCuboid(ray, Cuboid(node.AABBMin, node.AABBMax, mesh.Material), loopRayHit)) {
+            if (loopRayHit.Distance > rayHit.Distance) {
+                stackPointer--;
+                continue;
+            }
+
             // Process leaf
             if (int(node.NumTriangles) > 0) {
                 if (rayIntersectBVHLeaf(ray, node, mesh.Material, loopRayHit) && loopRayHit.Distance < rayHit.Distance) {
@@ -371,13 +381,11 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
                 stackPointer--;
                 continue;
             }
-            if (int(node.Child1) == -1) {
-                stackPointer--;
-                continue;
-            }
 
-            stack[stackPointer] = int(node.Child1);
-            stack[stackPointer+1] = int(node.Child2);
+            int nearNode = GetNearChild(ray, node);
+            int farNode = GetFarChild(ray, node);
+            stack[stackPointer] = farNode;
+            stack[stackPointer+1] = nearNode;
             stackPointer++;
         } else {
             stackPointer--;
