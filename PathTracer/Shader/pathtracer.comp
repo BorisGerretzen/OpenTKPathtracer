@@ -17,6 +17,7 @@ layout (binding=0, rgba32f) uniform image2D imgOut;
 layout (binding=1) uniform samplerCube skybox;
 layout (location=0) uniform uint currentFrameIndex;
 layout (location=1) uniform ivec2 gameObjectsSize;
+layout (location=2) uniform ivec2 lightsSize;
 
 // ---------- Structs ---------- //
 struct Material
@@ -123,6 +124,9 @@ layout(std140, binding = 5) uniform BVHMetadata {
 layout(std140, binding=6) buffer BVHSSBO {
     BVHNode BVHNodes[];
 } bvhSSBO;
+layout(std140, binding=7) uniform LightsUBO {
+    Sphere SphereLights[256];
+} lightsUBO;
 // ---------- End inputs ---------- //
 
 uint rndSeed;
@@ -142,6 +146,10 @@ float GetRandomFloat01()
     return float(GetPCGHash(rndSeed)) / 4294967296.0;
 }
 
+int GetRandomInt(int min, int max) {
+    return int(round(GetRandomFloat01() * (max-min))) + min;
+}
+
 vec3 CosineSampleHemisphere(vec3 normal)
 {
     float z = GetRandomFloat01() * 2.0 - 1.0;
@@ -150,6 +158,14 @@ vec3 CosineSampleHemisphere(vec3 normal)
     float x = r * cos(a);
     float y = r * sin(a);
     return normalize(normal + vec3(x, y, z));
+}
+
+vec3 CosineSampleSphere(Sphere sphere) {
+    float x = GetRandomFloat01();
+    float y = GetRandomFloat01();
+    float z = GetRandomFloat01();
+    vec3 result = vec3(x, y, z);
+    return normalize(result)*(sphere.Radius-0.01f)+sphere.Position;
 }
 
 // ---------- End random number stuff ---------- //
@@ -410,6 +426,17 @@ bool GetRayIntersection(Ray ray, out RayHit rayHit)
             }
         }
     }
+
+    for (int i = 0; i < lightsSize.x; i++) {
+        Sphere sphere = lightsUBO.SphereLights[i];
+
+        if (rayIntersectSphere(ray, sphere, loopRayHit)) {
+            if (loopRayHit.Distance < rayHit.Distance) {
+                rayHit = loopRayHit;
+            }
+        }
+    }
+
     for (int i = 0; i < gameObjectsSize.y; i++) {
         Cuboid cuboid = gameObjectsUBO.Cuboids[i];
 
@@ -458,6 +485,8 @@ float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted) {
 // Gets the color of a given ray with all the bounces and stuff.
 vec3 getColor(Ray ray)
 {
+    Ray initRay;
+    initRay.Direction = ray.Direction;
     RayHit rayHit;
     vec3 color = vec3(0.0);
     vec3 throughput = vec3(1.0);
@@ -469,8 +498,26 @@ vec3 getColor(Ray ray)
             if (rayHit.FromInside) {
                 rayHit.Normal *= -1.0;
             }
-            // Mix the colors
-            color += rayHit.Material.Emission * throughput;
+
+            if (initRay.Direction.x < 0) {
+                // Shadow ray
+                int x = lightsSize.x;
+                int sphereLightIndex = x-1;
+                Sphere lightSphere = lightsUBO.SphereLights[sphereLightIndex];
+                vec3 target = CosineSampleSphere(lightSphere);
+                RayHit shadowRayHit;
+                Ray shadowRay = Ray(rayHit.Position, normalize(target-rayHit.Position));
+                if (GetRayIntersection(shadowRay, shadowRayHit)) {
+                    color += (shadowRayHit.Material.Emission * throughput);
+                }
+
+                // Mix the colors
+                //                if (i == 0) {
+                //                    color += rayHit.Material.Emission * throughput;
+                //                }
+            } else {
+                color += rayHit.Material.Emission * throughput;
+            }
 
             // Get BSDF
             bool refracted;
@@ -515,6 +562,12 @@ void main()
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition.xyz, normalizedDeviceCoordinates);
         vec3 newC = getColor(ray);
         color += newC;
+        if (abs(ray.Direction.x) < 0.001f) {
+            color += vec3(100, 0, 0);
+        }
+        if (ray.Direction.x > 0.0f) {
+            color += vec3(0.2, 0, 0);
+        }
     }
 
     color /= RAYS_PER_PIXEL;

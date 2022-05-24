@@ -6,5 +6,6 @@ namespace PathTracer.Scene;
 public class Scene {
     [DataMember] public List<Cuboid> Cuboids { get; set; }
     [DataMember] public List<Sphere> Spheres { get; set; }
+    [DataMember] public List<Sphere> SphereLights { get; set; }
     [DataMember] public List<SerializableMesh> Meshes { get; set; }
 }
