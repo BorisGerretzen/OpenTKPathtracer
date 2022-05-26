@@ -495,26 +495,30 @@ vec3 getColor(Ray ray)
     {
         if (GetRayIntersection(ray, rayHit))
         {
+//            color += 1.0f / (rayHit.Distance*rayHit.Distance);
+//            return color;
             if (rayHit.FromInside) {
                 rayHit.Normal *= -1.0;
             }
 
             if (initRay.Direction.x < 0) {
+                // Mix the colors
+                if (i == 0) {
+                    color += rayHit.Material.Emission * throughput;
+                }
+                if(length(rayHit.Material.Emission) > 0) {
+                    break;
+                }
                 // Shadow ray
                 int x = lightsSize.x;
                 int sphereLightIndex = x-1;
                 Sphere lightSphere = lightsUBO.SphereLights[sphereLightIndex];
-                vec3 target = CosineSampleSphere(lightSphere);
+                vec3 target = lightSphere.Position;//CosineSampleSphere(lightSphere);
                 RayHit shadowRayHit;
                 Ray shadowRay = Ray(rayHit.Position, normalize(target-rayHit.Position));
-                if (GetRayIntersection(shadowRay, shadowRayHit)) {
-                    color += (shadowRayHit.Material.Emission * throughput);
+                if (GetRayIntersection(shadowRay, shadowRayHit) && !shadowRayHit.FromInside) {
+                    color += (shadowRayHit.Material.Emission * throughput) * (1.0f/(shadowRayHit.Distance*shadowRayHit.Distance)); //* (1.0f/(2*PI));
                 }
-
-                // Mix the colors
-                //                if (i == 0) {
-                //                    color += rayHit.Material.Emission * throughput;
-                //                }
             } else {
                 color += rayHit.Material.Emission * throughput;
             }
@@ -565,9 +569,9 @@ void main()
         if (abs(ray.Direction.x) < 0.001f) {
             color += vec3(100, 0, 0);
         }
-        if (ray.Direction.x > 0.0f) {
-            color += vec3(0.2, 0, 0);
-        }
+//        if (ray.Direction.x > 0.0f) {
+//            color += vec3(0.2, 0, 0);
+//        }
     }
 
     color /= RAYS_PER_PIXEL;

@@ -169,28 +169,28 @@ public class Game : GameWindow {
         var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f));
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f)*50);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
         // floor
         _sceneLoader.AddCuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse);
         // // roof
-        // _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse);
-        // // right wall
-        // _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse);
-        // // left wall
-        // _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse);
-        // // backwall
-        // _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse);
-        // _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse);
-        // _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse);
-        // _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse);
-        // _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse);
-        // // Frontwall
-        // _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse);
+        // right wall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse);
+        // left wall
+        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse);
+        // backwall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse);
+        // Frontwall
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
         // //Light
-        _sceneLoader.AddSphere(new Vector3(4.5f, 19.5f, 3.5f), 1f, whiteLight);
-        _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5, -0.2f, 2), Vector3.One * 30);
+        _sceneLoader.AddSphere(new Vector3(4.5f, 5.5f, 3.5f), 1f, whiteLight);
+        // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5, -0.2f, 2), Vector3.One * 30);
         
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter("scene.xml", false);
