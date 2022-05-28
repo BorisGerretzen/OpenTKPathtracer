@@ -6,17 +6,18 @@ namespace PathTracer;
 public class Shader : IDisposable {
     public readonly ShaderHandle Handle;
 
-    public Shader(string filename, ShaderType shaderType) {
+    public Shader(string code, ShaderType shaderType) {
         Handle = GL.CreateShader(shaderType);
-        GL.ShaderSource(Handle, File.ReadAllText(filename));
+        GL.ShaderSource(Handle, code);
         GL.CompileShader(Handle);
-        Console.WriteLine($"Shader '{filename}' compiled successfully.");
-
         string info;
         GL.GetShaderInfoLog(Handle, out info);
         Console.WriteLine(info);
+        if (string.IsNullOrEmpty(info))
+            Console.WriteLine("Shader compiled successfully.");
+        else
+            throw new InvalidOperationException("Shader failed to compile");
 
-        Console.WriteLine($"Shader '{filename}' compiled successfully.");
     }
 
     public void Dispose() {

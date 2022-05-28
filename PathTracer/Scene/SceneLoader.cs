@@ -9,6 +9,7 @@ namespace PathTracer.Scene;
 public class SceneLoader {
     public Scene Scene;
     private readonly BufferHandle _gameObjectsUbo;
+    private readonly BufferHandle _lightsUbo;
     private readonly ModelHolder _modelHolder;
     
     /// <summary>
@@ -18,13 +19,15 @@ public class SceneLoader {
     /// <param name="maxSpheres">Max number of spheres</param>
     /// <param name="gameObjectsUbo">BufferHandle of the game object buffer</param>
     /// <param name="modelHolder">The ModelHolder in use</param>
-    public SceneLoader(int maxCuboids, int maxSpheres, BufferHandle gameObjectsUbo, ModelHolder modelHolder) {
+    public SceneLoader(int maxCuboids, int maxSpheres, BufferHandle gameObjectsUbo, BufferHandle lightsUbo, ModelHolder modelHolder) {
         Scene = new Scene();
         Scene.Cuboids = new List<Cuboid>(maxCuboids);
         Scene.Spheres = new List<Sphere>(maxSpheres);
+        Scene.SphereLights = new List<Sphere>(maxSpheres);
         Scene.Meshes = new List<SerializableMesh>();
         _gameObjectsUbo = gameObjectsUbo;
         _modelHolder = modelHolder;
+        _lightsUbo = lightsUbo;
     }
 
     private SceneLoader() { }
@@ -37,7 +40,21 @@ public class SceneLoader {
     /// <exception cref="ConstraintException">If max number of cuboids is exceeded</exception>
     public void AddCuboid(Vector3 min, Vector3 max, Material material) {
         if (Scene.Cuboids.Count + 1 > Scene.Cuboids.Capacity) throw new ConstraintException($"Max number of cuboids '{Scene.Cuboids.Capacity}' has been exceeded.");
+        if (material.Emission.Length > 0) throw new ConstraintException("Cuboids cannot have emissive materials");
         Scene.Cuboids.Add(new Cuboid(min, max, material, Scene.Cuboids.Count));
+    }
+
+    /// <summary>
+    ///     Add a cuboid to the scene
+    /// </summary>
+    /// <param name="min">Minimum corner of the cuboid</param>
+    /// <param name="max">Maximum corner of the cuboid</param>
+    /// <param name="material">Material of the cuboid</param>
+    /// <exception cref="ConstraintException">If max number of cuboids is exceeded</exception>
+    public void AddCuboid(Vector3 position, float size, Material material) {
+        if (Scene.Cuboids.Count + 1 > Scene.Cuboids.Capacity) throw new ConstraintException($"Max number of cuboids '{Scene.Cuboids.Capacity}' has been exceeded.");
+        if (material.Emission.Length > 0) throw new ConstraintException("Cuboids cannot have emissive materials");
+        Scene.Cuboids.Add(new Cuboid(position, size, material, Scene.Cuboids.Count));
     }
 
     /// <summary>
@@ -49,7 +66,10 @@ public class SceneLoader {
     /// <exception cref="ConstraintException">If max number of spheres is exceeded</exception>
     public void AddSphere(Vector3 center, float radius, Material material) {
         if (Scene.Spheres.Count + 1 > Scene.Spheres.Capacity) throw new ConstraintException($"Max number of spheres '{Scene.Spheres.Capacity}' has been exceeded.");
-        Scene.Spheres.Add(new Sphere(center, radius, material, Scene.Spheres.Count));
+        if (material.Emission.Length > 0)
+            Scene.SphereLights.Add(new Sphere(center, radius, material, Scene.SphereLights.Count));
+        else
+            Scene.Spheres.Add(new Sphere(center, radius, material, Scene.Spheres.Count));
     }
 
     /// <summary>
@@ -69,6 +89,7 @@ public class SceneLoader {
     public void Upload() {
         Scene.Cuboids.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
         Scene.Spheres.ForEach(gameObject => gameObject.Upload(_gameObjectsUbo));
+        Scene.SphereLights.ForEach(gameObject => gameObject.Upload(_lightsUbo));
         Scene.Meshes.ForEach(mesh => _modelHolder.AddModel(mesh));
         _modelHolder.UploadModels();
     }
@@ -81,6 +102,14 @@ public class SceneLoader {
         return new Vector2i(Scene.Spheres.Count, Scene.Cuboids.Count);
     }
 
+    /// <summary>
+    ///     Gets the amount of sphere lights and cuboid lights
+    /// </summary>
+    /// <returns></returns>
+    public Vector2i GetLightsSize() {
+        return new Vector2i(Scene.SphereLights.Count, 0);
+    }
+    
     public void LoadScene(string path) {
         var xml = File.ReadAllText(path);
         var serializer = new XmlSerializer(typeof(Scene));

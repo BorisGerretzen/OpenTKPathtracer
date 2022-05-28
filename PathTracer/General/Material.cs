@@ -10,6 +10,8 @@ public class Material : Uploadable {
     public static Material WhiteDiffuse = new(Vector3.One, Vector3.Zero);
     public static Material WhiteLight = new(Vector3.One, Vector3.One);
     public static Material FullSpecular = new(Vector3.One, Vector3.Zero, 1.0f);
+    public static Material Glass = new(Vector3.One, Vector3.Zero, 0.02f, 0.98f, 1.2f);
+    public static Material Glossy = new(Vector3.One, Vector3.Zero, 0.3f);
     #endregion
     
     public static int SizeInBytes = Vector4.SizeInBytes * 3;

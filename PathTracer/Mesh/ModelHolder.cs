@@ -101,7 +101,7 @@ public class ModelHolder {
         // Build BVH
         mesh.BVHIndex = _bvhNodes.Count;
         var builder = new BVHBuilder(mesh.Vertices, mesh.Triangles, BVHType.SpatialSplit);
-        var bvhRoot = builder.Build(20);
+        var bvhRoot = builder.Build(50);
         var flat = bvhRoot.Flatten(_bvhNodes.Count, _triangles.Count);
         _bvhNodes.AddRange(flat.Item1);
         _triangles.AddRange(flat.Item2);
