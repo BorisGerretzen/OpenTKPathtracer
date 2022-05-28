@@ -192,7 +192,7 @@ public class Game : GameWindow {
         _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
         // //Light
         _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 3.5f), 0.5f, whiteLight);
-        // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
+        _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
 
         _sceneLoader.AddSphere(new Vector3(5f, 2f, 3.5f), 1f, whiteDiffuse);
         // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);

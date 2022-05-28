@@ -508,8 +508,7 @@ vec3 getColor(Ray ray)
                     break;
                 }
                 // Shadow ray
-                int x = lightsSize.x;
-                int sphereLightIndex = x-1;
+                int sphereLightIndex = GetRandomInt(0, lightsSize.x-1);
                 Sphere lightSphere = lightsUBO.SphereLights[sphereLightIndex];
                 vec3 target = CosineSampleSphere(lightSphere);
                 RayHit shadowRayHit;
@@ -517,10 +516,10 @@ vec3 getColor(Ray ray)
                 if (GetRayIntersection(shadowRay, shadowRayHit)) {
                     color += shadowRayHit.Material.Emission *
                     throughput *
-                    (1.0f/(max(0.01f, shadowRayHit.Distance*shadowRayHit.Distance))) *
+                    (1.0f/(max(0.00001f, shadowRayHit.Distance*shadowRayHit.Distance))) *
                     dot(shadowRay.Direction, rayHit.Normal) *
-                    (1/(2*PI));
-                    //throughput /= PI;
+                    (1/(2*PI)) *
+                    lightsSize.x;
                 }
 
             } else {
@@ -532,8 +531,8 @@ vec3 getColor(Ray ray)
             float rayProbability = BRDF(ray, rayHit, newRay, refracted);
             ray = newRay;
             throughput *= rayHit.Material.Albedo;
-
             throughput /= rayProbability;
+
             // Russian roulette
             float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
             if (GetRandomFloat01() > propagationChance) {
