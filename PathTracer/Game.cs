@@ -61,14 +61,14 @@ public class Game : GameWindow {
     public Game(
         GameWindowSettings gameWindowSettings,
         NativeWindowSettings nativeWindowSettings,
-        int rayDepth = 2,
+        int rayDepth,
         string scene = "")
         : base(gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
         _windowSize.Y = nativeWindowSettings.Size.Y;
         quality = false;
-        _rayDepth = rayDepth;
+        _rayDepth = rayDepth == 0 ? 2 : rayDepth;
         _scene = scene;
     }
 
@@ -225,9 +225,10 @@ public class Game : GameWindow {
         // _sceneLoader.AddSphere(new Vector3(5f, 4.5f, 3.5f), 1.5f, Material.Glass);
         // _sceneLoader.AddModel(@"Assets\Models\bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
 
-        _sceneLoader.AddCuboid(new Vector3(3f, 2f, 2f), 2f, Material.WhiteDiffuse);
-        _sceneLoader.AddSphere(new Vector3(3f, 4f, 2f), 1f, Material.FullSpecular);
-        _sceneLoader.AddSphere(new Vector3(6f, 3f, -1f), 2f, Material.FullSpecular);
+        _sceneLoader.AddCuboid(new Vector3(3f, 2f, 2f), 2f, Material.Glossy);
+        _sceneLoader.AddCuboid(new Vector3(6f, 2.5f, -1f), 3f, Material.Glossy);
+        // _sceneLoader.AddSphere(new Vector3(3f, 4f, 2f), 1f, Material.FullSpecular);
+        // _sceneLoader.AddSphere(new Vector3(6f, 3f, -1f), 2f, Material.FullSpecular);
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter(@"Assets\Scenes\export.xml", false);
         serializer.Serialize(writer, _sceneLoader.Scene);

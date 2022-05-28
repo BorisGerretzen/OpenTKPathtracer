@@ -120,6 +120,9 @@
         <None Update="Assets\Scenes\ReflectiveOrbs.xml">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Update="Assets\Scenes\GlossyBoxes.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

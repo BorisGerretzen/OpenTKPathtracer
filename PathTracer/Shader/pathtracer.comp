@@ -506,7 +506,7 @@ vec3 getColor(Ray ray)
             float rayProbability;
             rayProbability = BRDF(ray, rayHit, newRay, refracted, reflected);
 
-            if (initRay.Direction.x < 0 && !refracted && !rayHit.FromInside) {
+            if (!refracted && !rayHit.FromInside) {
                 // If first bounce or last bounce specular -> directly sample light source
                 if (i == 0 || reflected) {
                     color += rayHit.Material.Emission * throughput;
