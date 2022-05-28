@@ -154,7 +154,7 @@ public class Game : GameWindow {
         
         // Load compute shader
         _shaderProgram = new ShaderProgram(new List<Shader>
-            { new("Shader/pathtracer.comp", ShaderType.ComputeShader) });
+            { new(new ShaderCode(ShaderStructure.Default).Build(), ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
         // Create Vertex, indices, mesh, BVH buffer handles

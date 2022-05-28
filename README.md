@@ -28,5 +28,5 @@ Currently, the following material options are supported:
 
 ## Future work
 - [x] Next event estimation, to substantially reduce the convergence time.
+- [x] Splitting the compute shader source code into multiple files. Currently the compute shader resides in one big file, this makes it hard to edit and is not very DRY.
 - [ ] Different types of bounding volume hierarchy construction. Currently the bounding volumes are split using the spatial split method. A more optimized way would be to use the surface area heuristic.
-- [ ] Splitting the compute shader source code into multiple files. Currently the compute shader resides in one big file, this makes it hard to edit and is not very DRY.
