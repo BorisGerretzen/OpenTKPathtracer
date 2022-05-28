@@ -1,0 +1,45 @@
+name: $(Year:yyyy).$(Month).$(DayOfMonth)$(Rev:.r)
+pool:
+  vmImage: 'windows-2022'
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    exclude:
+    - README.md
+    - images/**
+
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+
+steps:
+- task: NuGetCommand@2
+  inputs:
+    command: 'restore'
+    restoreSolution: '**/*.sln'
+    feedsToUse: 'select'
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'build'
+    arguments: '--configuration $(buildConfiguration)'
+    packagesToPack: './PathTracer/PathTracer.csproj'
+    versioningScheme: 'byBuildNumber'
+  displayName: 'dotnet build'
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    Contents: 'PathTracer\bin\Release\**'
+    TargetFolder: '$(build.artifactstagingdirectory)'
+  condition: succeededOrFailed()
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
