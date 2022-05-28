@@ -477,7 +477,7 @@ float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted) {
     }
 
     newRay.Direction = normalize(newRayDirection);
-    newRay.Origin = rayHit.Position + newRay.Direction*0.001f;
+    newRay.Origin = rayHit.Position + rayHit.Normal *0.001f;
 
     return max(rayProbability, 0.001f);
 }
@@ -490,8 +490,8 @@ vec3 getColor(Ray ray)
     RayHit rayHit;
     vec3 color = vec3(0.0);
     vec3 throughput = vec3(1.0);
-
-    for (int i = 0; i < int(basicDataUBO.numBounces); i++)
+    
+    for (int i = 0; i < 2; i++)
     {
         if (GetRayIntersection(ray, rayHit))
         {
@@ -501,23 +501,21 @@ vec3 getColor(Ray ray)
                 rayHit.Normal *= -1.0;
             }
 
-            if (initRay.Direction.x < 0) {
+            if (initRay.Direction.x < 0 && length(rayHit.Material.Emission) <= 0) {
                 // Mix the colors
                 if (i == 0) {
                     color += rayHit.Material.Emission * throughput;
-                }
-                if(length(rayHit.Material.Emission) > 0) {
-                    break;
                 }
                 // Shadow ray
                 int x = lightsSize.x;
                 int sphereLightIndex = x-1;
                 Sphere lightSphere = lightsUBO.SphereLights[sphereLightIndex];
-                vec3 target = lightSphere.Position;//CosineSampleSphere(lightSphere);
+                vec3 target = CosineSampleSphere(lightSphere);
                 RayHit shadowRayHit;
-                Ray shadowRay = Ray(rayHit.Position, normalize(target-rayHit.Position));
-                if (GetRayIntersection(shadowRay, shadowRayHit) && !shadowRayHit.FromInside) {
-                    color += (shadowRayHit.Material.Emission * throughput) * (1.0f/(shadowRayHit.Distance*shadowRayHit.Distance)); //* (1.0f/(2*PI));
+                Ray shadowRay = Ray(rayHit.Position+rayHit.Normal*0.001f, normalize(target-rayHit.Position));
+                if (GetRayIntersection(shadowRay, shadowRayHit)) {
+                    color += (shadowRayHit.Material.Emission * throughput) * (1.0f/(shadowRayHit.Distance*shadowRayHit.Distance)) * (1.0f/(2*PI)) * dot(shadowRay.Direction, rayHit.Normal);
+                    throughput /= 2*PI;
                 }
             } else {
                 color += rayHit.Material.Emission * throughput;

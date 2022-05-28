@@ -76,7 +76,7 @@ public class Game : GameWindow {
             BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
             Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4);
-        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
+        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 5.0f);
         
         // Create GameObjects UBO
         BufferHandle gameObjectsUbo;
@@ -169,7 +169,7 @@ public class Game : GameWindow {
         var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f)*50);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f)*40);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
         // floor
@@ -189,9 +189,9 @@ public class Game : GameWindow {
         // Frontwall
         _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
         // //Light
-        _sceneLoader.AddSphere(new Vector3(4.5f, 5.5f, 3.5f), 1f, whiteLight);
+        _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 3.5f), 0.5f, whiteLight);
+        _sceneLoader.AddSphere(new Vector3(5f, 3.4f, 3.5f), 0.5f, whiteDiffuse);
         // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5, -0.2f, 2), Vector3.One * 30);
-        
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter("scene.xml", false);
         serializer.Serialize(writer, _sceneLoader.Scene);
