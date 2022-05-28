@@ -42,7 +42,7 @@ public class Game : GameWindow {
     private int _exportStartFrame = -10000;
     private readonly string _scene;
     private int _rayDepth;
-
+    private readonly bool _debug;
     private int RayDepth {
         get => _rayDepth;
         set {
@@ -62,7 +62,8 @@ public class Game : GameWindow {
         GameWindowSettings gameWindowSettings,
         NativeWindowSettings nativeWindowSettings,
         int rayDepth,
-        string scene = "")
+        string scene = "",
+        bool debug = false)
         : base(gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
@@ -70,6 +71,7 @@ public class Game : GameWindow {
         quality = false;
         _rayDepth = rayDepth == 0 ? 2 : rayDepth;
         _scene = scene;
+        _debug = debug;
     }
 
     private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity,
@@ -153,8 +155,12 @@ public class Game : GameWindow {
         GL.TexParameteri(TextureTarget.TextureCubeMap, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
         
         // Load compute shader
-        _shaderProgram = new ShaderProgram(new List<Shader>
-            { new(new ShaderCode(ShaderStructure.Default).Build(), ShaderType.ComputeShader) });
+        if (_debug)
+            _shaderProgram = new ShaderProgram(new List<Shader>
+                { new(new ShaderCode(ShaderStructure.DebugNee).Build(), ShaderType.ComputeShader) });
+        else
+            _shaderProgram = new ShaderProgram(new List<Shader>
+                { new(new ShaderCode(ShaderStructure.Default).Build(), ShaderType.ComputeShader) });
         _shaderProgram.Use();
 
         // Create Vertex, indices, mesh, BVH buffer handles
@@ -186,37 +192,25 @@ public class Game : GameWindow {
     }
 
     private void CreateScene() {
-        var whiteDiffuse = new Material(new Vector3(0.9f, 0.9f, 0.9f), new Vector3(0));
-        var whiteDiffuseRefractive = new Material(new Vector3(1, 1, 1), new Vector3(0.2f, 0.2f, 0.2f), 0.02f, 0.98f, 1.52f);
-        var whiteDiffuseReflective = new Material(new Vector3(1, 1, 1), new Vector3(0, 0, 0), 1f);
-        var redDiffuse = new Material(new Vector3(1, 0.3f, 0.3f), new Vector3(0.0f));
-        var greenDiffuse = new Material(new Vector3(0.65f, 0.3f, 0.65f), new Vector3(0));
-        var blueDiffuse = new Material(new Vector3(0.3f, 0.3f, 1), new Vector3(0));
-
-        var greenLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 1f, 0.2f) * 10.0f);
-        var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
-        var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
-        var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 40);
-        var yellowLight = new Material(new Vector3(0.04f), new Vector3(1, 1, 0.4f) * 20);
-        var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
-
+        var whiteLight = Material.WhiteLight;
+        whiteLight.Emission *= 40;
+        
         // floor
-        _sceneLoader.AddCuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 0, -10), new Vector3(10, 1, 10), Material.WhiteDiffuse);
         // // roof
-        _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), Material.WhiteDiffuse);
         // right wall
-        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), blueDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), Material.BlueDiffuse);
         // left wall
-        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), redDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), Material.RedDiffuse);
         // backwall
-        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), whiteDiffuse);
-        _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), whiteDiffuse);
-        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), whiteDiffuse);
-        _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), whiteDiffuse);
-        _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), Material.WhiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), Material.WhiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(2, 10, 10), Material.WhiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(8, 1, 9), new Vector3(10, 10, 10), Material.WhiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(2, 2, 9), new Vector3(8, 9, 10), Material.WhiteDiffuse);
         // Frontwall
-        _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), Material.WhiteDiffuse);
         // //Light
         _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 3.5f), 0.5f, whiteLight);
         // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);

@@ -18,7 +18,7 @@ Parser.Default.ParseArguments<Options>(Environment.GetCommandLineArgs()).WithPar
     nativeWindowSettings.Size = windowSize;
     nativeWindowSettings.Title = "Pathtracer?";
     nativeWindowSettings.Flags = ContextFlags.Debug;
-    using (var game = new Game(gameWindowSettings, nativeWindowSettings, o.RayDepth, o.SceneFile)) {
+    using (var game = new Game(gameWindowSettings, nativeWindowSettings, o.RayDepth, o.SceneFile, o.Debug)) {
         //Run takes a double, which is how many frames per second it should strive to reach.
         //You can leave that out and it'll just update as fast as the hardware will allow it.
         game.Run();
@@ -31,4 +31,7 @@ public class Options {
 
     [Option('d', "depth", Required = false, HelpText = "Intial ray depth")]
     public int RayDepth { get; set; }
+
+    [Option("debug", Required = false, HelpText = "Enable debug mode")]
+    public bool Debug { get; set; }
 }
