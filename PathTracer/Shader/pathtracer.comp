@@ -478,7 +478,7 @@ float BRDF(Ray ray, RayHit rayHit, out Ray newRay, out bool refracted, out bool 
     }
 
     newRay.Direction = normalize(newRayDirection);
-    newRay.Origin = rayHit.Position + rayHit.Normal *0.001f;
+    newRay.Origin = rayHit.Position + newRay.Direction * 0.001f;
 
     return max(rayProbability, 0.001f);
 }

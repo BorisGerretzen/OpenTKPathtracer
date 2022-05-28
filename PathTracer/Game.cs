@@ -211,7 +211,7 @@ public class Game : GameWindow {
         // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
 
         // _sceneLoader.AddSphere(new Vector3(3.5f, 2.5f, 3.5f), 1.5f, Material.FullSpecular);
-        _sceneLoader.AddSphere(new Vector3(5f, 2.5f, 3.5f), 1.5f, Material.WhiteDiffuse);
+        _sceneLoader.AddSphere(new Vector3(5f, 2.5f, 3.5f), 1.5f, Material.Glass);
         // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter("scene.xml", false);
