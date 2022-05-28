@@ -491,20 +491,21 @@ vec3 getColor(Ray ray)
     vec3 color = vec3(0.0);
     vec3 throughput = vec3(1.0);
     
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < basicDataUBO.numBounces; i++)
     {
         if (GetRayIntersection(ray, rayHit))
         {
-//            color += 1.0f / (rayHit.Distance*rayHit.Distance);
-//            return color;
             if (rayHit.FromInside) {
                 rayHit.Normal *= -1.0;
             }
 
-            if (initRay.Direction.x < 0 && length(rayHit.Material.Emission) <= 0) {
+            if (initRay.Direction.x < 0) {
                 // Mix the colors
                 if (i == 0) {
                     color += rayHit.Material.Emission * throughput;
+                }
+                if (length(rayHit.Material.Emission) > 0) {
+                    break;
                 }
                 // Shadow ray
                 int x = lightsSize.x;
@@ -514,22 +515,25 @@ vec3 getColor(Ray ray)
                 RayHit shadowRayHit;
                 Ray shadowRay = Ray(rayHit.Position+rayHit.Normal*0.001f, normalize(target-rayHit.Position));
                 if (GetRayIntersection(shadowRay, shadowRayHit)) {
-                    color += (shadowRayHit.Material.Emission * throughput) * (1.0f/(shadowRayHit.Distance*shadowRayHit.Distance)) * (1.0f/(2*PI)) * dot(shadowRay.Direction, rayHit.Normal);
-                    throughput /= 2*PI;
+                    color += shadowRayHit.Material.Emission *
+                    throughput *
+                    (1.0f/(max(0.01f, shadowRayHit.Distance*shadowRayHit.Distance))) *
+                    dot(shadowRay.Direction, rayHit.Normal) *
+                    (1/(2*PI));
+                    //throughput /= PI;
                 }
+
             } else {
                 color += rayHit.Material.Emission * throughput;
             }
-
             // Get BSDF
             bool refracted;
             Ray newRay;
             float rayProbability = BRDF(ray, rayHit, newRay, refracted);
             ray = newRay;
-
             throughput *= rayHit.Material.Albedo;
-            throughput /= rayProbability;
 
+            throughput /= rayProbability;
             // Russian roulette
             float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
             if (GetRandomFloat01() > propagationChance) {
@@ -564,12 +568,12 @@ void main()
         Ray ray = rayFromCamera(basicDataUBO.InverseProjectionMatrix, basicDataUBO.InverseViewMatrix, basicDataUBO.ViewPosition.xyz, normalizedDeviceCoordinates);
         vec3 newC = getColor(ray);
         color += newC;
-        if (abs(ray.Direction.x) < 0.001f) {
-            color += vec3(100, 0, 0);
-        }
-//        if (ray.Direction.x > 0.0f) {
-//            color += vec3(0.2, 0, 0);
-//        }
+        //        if (abs(ray.Direction.z) < 0.001f) {
+        //            color += vec3(100, 0, 0);
+        //        }
+        //        if (ray.Direction.x > 0.0f) {
+        //            color += vec3(0.2, 0, 0);
+        //        }
     }
 
     color /= RAYS_PER_PIXEL;
