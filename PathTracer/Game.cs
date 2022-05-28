@@ -40,7 +40,7 @@ public class Game : GameWindow {
     private Vector2i _windowSize;
     private GLDebugProc callback;
     private int _exportStartFrame = -10000;
-
+    private readonly string _scene;
     private int _rayDepth;
 
     private int RayDepth {
@@ -57,12 +57,19 @@ public class Game : GameWindow {
             Console.WriteLine($"Rendering with maximum ray depth of {_rayDepth}.");
         }
     }
-    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
-        gameWindowSettings, nativeWindowSettings) {
+
+    public Game(
+        GameWindowSettings gameWindowSettings,
+        NativeWindowSettings nativeWindowSettings,
+        int rayDepth = 2,
+        string scene = "")
+        : base(gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
         _windowSize.X = nativeWindowSettings.Size.X;
         _windowSize.Y = nativeWindowSettings.Size.Y;
         quality = false;
+        _rayDepth = rayDepth;
+        _scene = scene;
     }
 
     private static void OpenGlDebugCallback(DebugSource source, DebugType type, uint id, DebugSeverity severity,
@@ -93,7 +100,7 @@ public class Game : GameWindow {
             BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
             Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4);
-        RayDepth = 2;
+        RayDepth = _rayDepth;
         
         // Create GameObjects UBO
         BufferHandle gameObjectsUbo;
@@ -128,7 +135,7 @@ public class Game : GameWindow {
         GL.ActiveTexture(TextureUnit.Texture1);
         _skyboxTexture = GL.CreateTexture(TextureTarget.TextureCubeMap); //GL.CreateTexture(TextureTarget.TextureCubeMap);
         GL.BindTexture(TextureTarget.TextureCubeMap, _skyboxTexture);
-        foreach (var file in Directory.GetFiles(@"Images\Skybox"))
+        foreach (var file in Directory.GetFiles(@"Assets\Images\Skybox"))
             using (var image = Image.Load(file)) {
                 image.Mutate(img => img.Flip(FlipMode.Horizontal));
                 using (var ms = new MemoryStream()) {
@@ -166,7 +173,11 @@ public class Game : GameWindow {
         // Load scene
         var modelHolder = new ModelHolder(vertexBufferHandle, indicesBufferHandle, meshBufferHandle, bvhMetadataHandle, bvhBufferHandle);
         _sceneLoader = new SceneLoader(_maxCuboids, _maxSpheres, gameObjectsUbo, lightsUBO, modelHolder);
-        CreateScene();
+        if (string.IsNullOrEmpty(_scene))
+            CreateScene();
+        else
+            _sceneLoader.LoadScene(_scene);
+
         _sceneLoader.Upload();
         
         // Spawn camera
@@ -211,10 +222,14 @@ public class Game : GameWindow {
         // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
 
         // _sceneLoader.AddSphere(new Vector3(3.5f, 2.5f, 3.5f), 1.5f, Material.FullSpecular);
-        _sceneLoader.AddSphere(new Vector3(5f, 2.5f, 3.5f), 1.5f, Material.Glass);
-        // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
+        // _sceneLoader.AddSphere(new Vector3(5f, 4.5f, 3.5f), 1.5f, Material.Glass);
+        // _sceneLoader.AddModel(@"Assets\Models\bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
+
+        _sceneLoader.AddCuboid(new Vector3(3f, 2f, 2f), 2f, Material.WhiteDiffuse);
+        _sceneLoader.AddSphere(new Vector3(3f, 4f, 2f), 1f, Material.FullSpecular);
+        _sceneLoader.AddSphere(new Vector3(6f, 3f, -1f), 2f, Material.FullSpecular);
         var serializer = new XmlSerializer(typeof(Scene.Scene));
-        var writer = new StreamWriter("scene.xml", false);
+        var writer = new StreamWriter(@"Assets\Scenes\export.xml", false);
         serializer.Serialize(writer, _sceneLoader.Scene);
         _stopwatch.Start();
     }

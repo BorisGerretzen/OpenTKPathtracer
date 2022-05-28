@@ -45,6 +45,19 @@ public class SceneLoader {
     }
 
     /// <summary>
+    ///     Add a cuboid to the scene
+    /// </summary>
+    /// <param name="min">Minimum corner of the cuboid</param>
+    /// <param name="max">Maximum corner of the cuboid</param>
+    /// <param name="material">Material of the cuboid</param>
+    /// <exception cref="ConstraintException">If max number of cuboids is exceeded</exception>
+    public void AddCuboid(Vector3 position, float size, Material material) {
+        if (Scene.Cuboids.Count + 1 > Scene.Cuboids.Capacity) throw new ConstraintException($"Max number of cuboids '{Scene.Cuboids.Capacity}' has been exceeded.");
+        if (material.Emission.Length > 0) throw new ConstraintException("Cuboids cannot have emissive materials");
+        Scene.Cuboids.Add(new Cuboid(position, size, material, Scene.Cuboids.Count));
+    }
+
+    /// <summary>
     ///     Adds a sphere to the scene.
     /// </summary>
     /// <param name="center">Position of the center of the sphere</param>

@@ -9,11 +9,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CjClutter.ObjLoader" Version="1.0.0" />
+        <PackageReference Include="CjClutter.ObjLoader" Version="1.0.0"/>
+        <PackageReference Include="CommandLineParser" Version="2.9.1"/>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
-        <PackageReference Include="OpenTK" Version="5.0.0-pre.7" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.1" />
-        <PackageReference Include="System.Drawing.Common" Version="7.0.0-preview.3.22175.4" />
+        <PackageReference Include="OpenTK" Version="5.0.0-pre.7"/>
+        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.1"/>
+        <PackageReference Include="System.Drawing.Common" Version="7.0.0-preview.3.22175.4"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -86,10 +87,39 @@
         <None Update="Shader\pathtracer.comp">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="Models"/>
+        <None Update="Assets\Images\Skybox\NEG_X.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Images\Skybox\NEG_Y.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Images\Skybox\NEG_Z.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Images\Skybox\POS_X.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Images\Skybox\POS_Y.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Images\Skybox\POS_Z.jpg">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Scenes\RefractiveSphereWindow.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Models\bunny.obj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Models\teapot.obj">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Scenes\DiffuseBunny.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Scenes\ReflectiveOrbs.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>
