@@ -39,8 +39,24 @@ public class Game : GameWindow {
     private TextureHandle _textureHandle;
     private Vector2i _windowSize;
     private GLDebugProc callback;
-    private Timer _controlsTimer;
-    
+    private int _exportStartFrame = -10000;
+
+    private int _rayDepth;
+
+    private int RayDepth {
+        get => _rayDepth;
+        set {
+            if (value <= 0) {
+                Console.WriteLine("Ray depth <= 0 is not allowed");
+                return;
+            }
+
+            _rayDepth = value;
+            GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, (float)_rayDepth);
+            _frameNumber = 0;
+            Console.WriteLine($"Rendering with maximum ray depth of {_rayDepth}.");
+        }
+    }
     public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings) : base(
         gameWindowSettings, nativeWindowSettings) {
         _windowSize = new Vector2i(0);
@@ -77,7 +93,7 @@ public class Game : GameWindow {
             BufferStorageMask.DynamicStorageBit);
         GL.BindBufferRange(BufferTargetARB.UniformBuffer, 0, _basicDataUbo, IntPtr.Zero,
             Vector4.SizeInBytes * 4 * 2 + Vector4.SizeInBytes + 4);
-        GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
+        RayDepth = 2;
         
         // Create GameObjects UBO
         BufferHandle gameObjectsUbo;
@@ -170,7 +186,7 @@ public class Game : GameWindow {
         var purpleLight = new Material(new Vector3(0.04f), new Vector3(0.678f, 0.4f, 0.815f));
         var redLight = new Material(new Vector3(1, 0, 0), new Vector3(0.4f, 0.2f, 0.2f));
         var blueLight = new Material(new Vector3(0.04f), new Vector3(0.2f, 0.2f, 1f) * 10.0f);
-        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 20);
+        var whiteLight = new Material(new Vector3(0.04f), new Vector3(1, 0.964f, 0.929f) * 40);
         var yellowLight = new Material(new Vector3(0.04f), new Vector3(1, 1, 0.4f) * 20);
         var whiteLightSoft = new Material(new Vector3(0.02f), new Vector3(1, 0.964f, 0.929f) * 2f);
 
@@ -192,9 +208,10 @@ public class Game : GameWindow {
         _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), whiteDiffuse);
         // //Light
         _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 3.5f), 0.5f, whiteLight);
-        _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
+        // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
 
-        _sceneLoader.AddSphere(new Vector3(5f, 2f, 3.5f), 1f, whiteDiffuse);
+        // _sceneLoader.AddSphere(new Vector3(3.5f, 2.5f, 3.5f), 1.5f, Material.FullSpecular);
+        _sceneLoader.AddSphere(new Vector3(5f, 2.5f, 3.5f), 1.5f, Material.WhiteDiffuse);
         // _sceneLoader.AddModel("Models/bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter("scene.xml", false);
@@ -245,6 +262,8 @@ public class Game : GameWindow {
         GL.BlitFramebuffer(0, 0, _windowSize.X, _windowSize.Y, 0, 0, _windowSize.X, _windowSize.Y,
             ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
         SwapBuffers();
+
+        if (_exportStartFrame >= _frameNumber - 1000 && _frameNumber % 100 == 0) SaveImage();
     }
 
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
@@ -284,15 +303,10 @@ public class Game : GameWindow {
                 DebugSeverity.DebugSeverityNotification, -1, $"Camera {lockState}");
         }
 
-        if (KeyboardState.IsKeyDown(Keys.Q) && !_lastKeyboardState.IsKeyDown(Keys.Q)) {
-            quality = !quality;
-            if (quality)
-                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 10f);
-            else
-                GL.NamedBufferSubData(_basicDataUbo, (IntPtr)(Vector4.SizeInBytes * 9), 4, 2.0f);
-            _frameNumber = 0;
-        }
-        
+        if (KeyboardState.IsKeyDown(Keys.Equal) && !_lastKeyboardState.IsKeyDown(Keys.Equal)) RayDepth++;
+
+        if (KeyboardState.IsKeyDown(Keys.Minus) && !_lastKeyboardState.IsKeyDown(Keys.Minus)) RayDepth--;
+
         // Save image on press I
         if (KeyboardState.IsKeyDown(Keys.I) && !_lastKeyboardState.IsKeyDown(Keys.I)) {
             GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
@@ -302,6 +316,12 @@ public class Game : GameWindow {
                 DebugSeverity.DebugSeverityNotification, -1, "Image export finished");
         }
 
+        // Do export of 1000 frames on E
+        if (KeyboardState.IsKeyDown(Keys.E) && !_lastKeyboardState.IsKeyDown(Keys.E)) {
+            GL.DebugMessageInsert(DebugSource.DebugSourceApplication, DebugType.DebugTypeMarker, 0,
+                DebugSeverity.DebugSeverityNotification, -1, "Starting progressive export");
+            _exportStartFrame = (int)_frameNumber;
+        }
 
         _lastKeyboardState = KeyboardState.GetSnapshot();
         if (_cameraLocked) return;
