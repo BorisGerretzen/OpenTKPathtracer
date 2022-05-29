@@ -141,6 +141,12 @@
         <None Update="Assets\Shaders\debug_nee\main.glsl">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Update="Assets\Shaders\no_nee\main.glsl">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\Scenes\DiffuseOrbs.xml">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

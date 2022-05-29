@@ -10,10 +10,12 @@ public class Material : Uploadable {
     public static Material WhiteDiffuse = new(Vector3.One, Vector3.Zero);
     public static Material WhiteLight = new(Vector3.One, Vector3.One);
     public static Material FullSpecular = new(Vector3.One, Vector3.Zero, 1.0f);
-    public static Material Glass = new(Vector3.One, Vector3.Zero, 0.02f, 0.98f, 1.2f);
+    public static Material Glass = new(Vector3.One, Vector3.Zero, 0f, 1f, 1.2f);
     public static Material Glossy = new(Vector3.One, Vector3.Zero, 0.3f);
     public static Material BlueDiffuse = new(new Vector3(0.3f, 0.3f, 1), new Vector3(0));
     public static Material RedDiffuse = new(new Vector3(1f, 0.3f, 0.3f), new Vector3(0));
+    public static Material PurpleDiffuse = new(Color.FromHex(0xEE00EE), new Vector3(0));
+    public static Material YellowDiffuse = new(Color.FromHex(0xEEEE00), new Vector3(0));
 
     #endregion
     

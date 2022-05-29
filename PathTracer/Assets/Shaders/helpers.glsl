@@ -55,19 +55,19 @@ Ray rayFromCamera(mat4 inverseProjectionMatrix, mat4 inverseViewMatrix, vec3 vie
 
 int GetNearChild(Ray ray, BVHNode node) {
     if (int(node.SplitAxis) == SPLIT_X) {
-        if (ray.Direction.x > 0) {
+        if (ray.Direction.x >= 0) {
             return int(node.Child1);
         } else {
             return int(node.Child2);
         }
     } else if (int(node.SplitAxis) == SPLIT_Y) {
-        if (ray.Direction.y > 0) {
+        if (ray.Direction.y >= 0) {
             return int(node.Child1);
         } else {
             return int(node.Child2);
         }
     } else {
-        if (ray.Direction.z > 0) {
+        if (ray.Direction.z >= 0) {
             return int(node.Child1);
         } else {
             return int(node.Child2);

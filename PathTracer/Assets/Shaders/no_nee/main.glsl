@@ -1,34 +1,4 @@
-﻿vec3 sampleLights(RayHit rayHit, bool reflected) {
-    // Shadow ray
-    int sphereLightIndex = GetRandomInt(0, lightsSize.x-1);
-    Sphere lightSphere = lightsUBO.SphereLights[sphereLightIndex];
-    vec3 target = CosineSampleHemisphere(normalize(rayHit.Position - lightSphere.Position));
-    target *= lightSphere.Radius;
-    target += lightSphere.Position;
-
-    RayHit shadowRayHit;
-    Ray shadowRay = Ray(rayHit.Position+rayHit.Normal*0.001f, normalize(target-rayHit.Position));
-    vec3 returnVal = vec3(0);
-    if (GetRayIntersection(shadowRay, shadowRayHit) && length(shadowRayHit.Material.Emission) > 0) {
-        float angle = dot(shadowRay.Direction, rayHit.Normal);
-        float pdf = 1/PI;
-        if (reflected) {
-            pdf = 1/2*PI;
-        }
-
-        returnVal = shadowRayHit.Material.Emission *
-        rayHit.Material.Albedo *
-        (1/(max(0.001f, shadowRayHit.Distance*shadowRayHit.Distance))) *
-        angle *
-        dot(shadowRayHit.Normal, -shadowRay.Direction) *
-        pdf *
-        lightsSize.x;
-    }
-
-    return returnVal;
-}
-
-// Gets the color of a given ray with all the bounces and stuff.
+﻿// Gets the color of a given ray with all the bounces and stuff.
 vec3 getColor(Ray ray)
 {
     RayHit rayHit;
@@ -42,24 +12,17 @@ vec3 getColor(Ray ray)
             if (rayHit.FromInside) {
                 rayHit.Normal = -rayHit.Normal;
             }
-
             bool refracted;
             bool reflected;
+
             Ray newRay;
             float rayProbability;
             rayProbability = BRDF(ray, rayHit, newRay, refracted, reflected);
-
-            // No NEE in refractions
-            if (!refracted && !rayHit.FromInside) {
-                if (i == 0 || reflected) { // Sample light directly if reflected or first ray
-                    color += rayHit.Material.Emission * throughput;
-                }
-                if (length(rayHit.Material.Emission) == 0) { // Only NEE on non lights
-                    color += sampleLights(rayHit, reflected) * throughput;
-                }
-            } else {
-                color += rayHit.Material.Emission * throughput;
-            }
+            //            if(refracted && reflected) {
+            //                color = vec3(1.0, 0, 0);
+            //                return color;
+            //            }
+            color += rayHit.Material.Emission * throughput;
 
             // Get BSDF
             ray = newRay;
@@ -67,11 +30,11 @@ vec3 getColor(Ray ray)
             throughput /= rayProbability;
 
             // Russian roulette
-//            float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
-//            if (GetRandomFloat01() > propagationChance) {
-//                break;
-//            }
-//            throughput *= 1.0f/propagationChance;
+            float propagationChance = max(max(throughput.x, throughput.y), throughput.z);
+            if (GetRandomFloat01() > propagationChance) {
+                break;
+            }
+            throughput *= 1.0f/propagationChance;
         }
         else
         {

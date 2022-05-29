@@ -10,7 +10,14 @@
     } else if (rayHit.Material.Specularity + rayHit.Material.Refractivity > reflectRoll) {
         newRayDirection = refract(ray.Direction, rayHit.Normal, rayHit.FromInside ? rayHit.Material.IndexOfRefraction:1.0f/rayHit.Material.IndexOfRefraction);
         rayProbability = rayHit.Material.Refractivity;
-        refracted = true;
+
+        if (length(newRayDirection) <= 0.01f) {
+            newRayDirection = reflect(ray.Direction, rayHit.Normal);
+            rayProbability = 1;
+            reflected = true;
+        } else {
+            refracted = true;
+        }
     }
     else {
         newRayDirection = CosineSampleHemisphere(rayHit.Normal);

@@ -103,7 +103,7 @@ bool rayIntersectTriangle(Ray ray, Vertex v1, Vertex v2, Vertex v3, Material mat
 
     rayHit.Distance = t;
     rayHit.Position = planeIntersection;
-    rayHit.FromInside = false;
+    rayHit.FromInside = dotNormalDirection > 0;
     rayHit.Normal = normalize(normal);
     rayHit.Material = material;
     return true;
@@ -148,7 +148,6 @@ bool rayIntersectMesh(Ray ray, Mesh mesh, out RayHit rayHit) {
                 stackPointer--;
                 continue;
             }
-
             // Process leaf
             if (int(node.NumTriangles) > 0) {
                 if (rayIntersectBVHLeaf(ray, node, mesh.Material, loopRayHit) && loopRayHit.Distance < rayHit.Distance) {

@@ -22,6 +22,13 @@ public class ShaderStructure {
         "brdf.glsl",
         @"debug_nee\main.glsl");
 
+    public static ShaderStructure NoNee = new(@"Assets\Shaders",
+        "defines.glsl",
+        "inputs.glsl",
+        "helpers.glsl",
+        "intersections.glsl",
+        "brdf.glsl",
+        @"no_nee\main.glsl");
     #endregion
 
     [DataMember] public List<string> ShaderFragments { get; set; }

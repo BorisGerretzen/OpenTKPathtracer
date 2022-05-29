@@ -46,7 +46,7 @@ public class Game : GameWindow {
     private int RayDepth {
         get => _rayDepth;
         set {
-            if (value <= 0) {
+            if (value < 0) {
                 Console.WriteLine("Ray depth <= 0 is not allowed");
                 return;
             }
@@ -189,6 +189,7 @@ public class Game : GameWindow {
         // Spawn camera
         _camera = new Camera(new Vector3(5, 4, 8), Size.X / (float)Size.Y);
         CursorGrabbed = true;
+        _stopwatch.Start();
     }
 
     private void CreateScene() {
@@ -200,9 +201,9 @@ public class Game : GameWindow {
         // // roof
         _sceneLoader.AddCuboid(new Vector3(0, 10, -10), new Vector3(10, 11, 10), Material.WhiteDiffuse);
         // right wall
-        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), Material.BlueDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(0, 1, -10), new Vector3(1, 10, 9), Material.YellowDiffuse);
         // left wall
-        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), Material.RedDiffuse);
+        _sceneLoader.AddCuboid(new Vector3(9, 1, -10), new Vector3(10, 10, 9), Material.PurpleDiffuse);
         // backwall
         _sceneLoader.AddCuboid(new Vector3(0, 1, 9), new Vector3(10, 2, 10), Material.WhiteDiffuse);
         _sceneLoader.AddCuboid(new Vector3(0, 9, 9), new Vector3(10, 10, 10), Material.WhiteDiffuse);
@@ -212,21 +213,20 @@ public class Game : GameWindow {
         // Frontwall
         _sceneLoader.AddCuboid(new Vector3(0, 1, -5), new Vector3(10, 10, -4), Material.WhiteDiffuse);
         // //Light
-        _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 3.5f), 0.5f, whiteLight);
+        _sceneLoader.AddSphere(new Vector3(5f, 8.4f, 3.5f), 0.5f, whiteLight);
         // _sceneLoader.AddSphere(new Vector3(5f, 7.4f, 6.5f), 0.5f, yellowLight);
 
-        // _sceneLoader.AddSphere(new Vector3(3.5f, 2.5f, 3.5f), 1.5f, Material.FullSpecular);
-        // _sceneLoader.AddSphere(new Vector3(5f, 4.5f, 3.5f), 1.5f, Material.Glass);
-        // _sceneLoader.AddModel(@"Assets\Models\bunny.obj", Material.WhiteDiffuse, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
+        // _sceneLoader.AddSphere(new Vector3(5f, 3.5f, 3.5f), 1.5f, Material.WhiteDiffuse);
+        _sceneLoader.AddSphere(new Vector3(5f, 3.5f, 3.5f), 1.5f, Material.WhiteDiffuse);
+        // _sceneLoader.AddModel(@"Assets\Models\bunny.obj", Material.Glass, new Vector3(5.5f, -0.2f, 3f), Vector3.One * 30);
 
-        _sceneLoader.AddCuboid(new Vector3(3f, 2f, 2f), 2f, Material.Glossy);
-        _sceneLoader.AddCuboid(new Vector3(6f, 2.5f, -1f), 3f, Material.Glossy);
+        // _sceneLoader.AddCuboid(new Vector3(3f, 2f, 2f), 2f, Material.Glossy);
+        // _sceneLoader.AddCuboid(new Vector3(6f, 2.5f, -1f), 3f, Material.Glossy);
         // _sceneLoader.AddSphere(new Vector3(3f, 4f, 2f), 1f, Material.FullSpecular);
         // _sceneLoader.AddSphere(new Vector3(6f, 3f, -1f), 2f, Material.FullSpecular);
         var serializer = new XmlSerializer(typeof(Scene.Scene));
         var writer = new StreamWriter(@"Assets\Scenes\export.xml", false);
         serializer.Serialize(writer, _sceneLoader.Scene);
-        _stopwatch.Start();
     }
 
     protected override void OnResize(ResizeEventArgs e) {
